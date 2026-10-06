@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ project_name }} — Security Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dashboard_style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-title">
+    <span class="brand">VulnCompass</span><span class="divider">/</span>{{ project_name }}
+  </div>
+  <div class="topbar-meta">รายงานวันที่ {{ report_date }}</div>
+</header>
+
+{% set order = ['critical', 'high', 'medium', 'low', 'info'] %}
+{% set labels = {'critical': 'วิกฤต', 'high': 'สูง', 'medium': 'ปานกลาง', 'low': 'ต่ำ', 'info': 'ข้อมูล'} %}
+{% set sev_map = {} %}
+{% for item in severity_data %}{% set _ = sev_map.update({item.severity: item.count}) %}{% endfor %}
+{% set total = severity_data | sum(attribute='count') %}
+
+<section class="severity-overview">
+  <h2>สรุปตามระดับความรุนแรง</h2>
+  <div class="sev-bar">
+    {% for sev in order %}
+      {% set count = sev_map.get(sev, 0) %}
+      {% if count > 0 %}
+      <div class="sev-segment sev-{{ sev }}" style="flex-grow: {{ count }};"></div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  <div class="sev-legend">
+    <button class="sev-pill sev-all is-active" data-filter="all" type="button">
+      <span class="dot"></span>ทั้งหมด <span class="count">{{ total }}</span>
+    </button>
+    {% for sev in order %}
+      {% set count = sev_map.get(sev, 0) %}
+      {% if count > 0 %}
+      <button class="sev-pill sev-{{ sev }}" data-filter="{{ sev }}" type="button">
+        <span class="dot"></span>{{ labels.get(sev, sev) }} <span class="count">{{ count }}</span>
+      </button>
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
+
+<section class="findings">
+  <div class="findings-toolbar">
+    <h2>รายการช่องโหว่ ({{ top_findings|length }})</h2>
+    <input type="search" id="searchBox" placeholder="ค้นหาชื่อช่องโหว่, หมวด, เครื่องมือ..." autocomplete="off">
+  </div>
+
+  <div class="findings-list" id="findingsList">
+    {% for finding in top_findings %}
+    <details class="finding-row sev-{{ finding.severity }}"
+              data-severity="{{ finding.severity }}"
+              data-search="{{ (finding.title ~ ' ' ~ (finding.owasp_category or '') ~ ' ' ~ finding.tool) | lower }}">
+      <summary>
+        <span class="sev-stripe"></span>
+        <span class="f-title">{{ finding.title }}</span>
+        <span class="f-meta">
+          <span class="f-tag">{{ finding.cwe_id or "ไม่มี CWE" }}</span>
+          <span class="f-owasp">{{ finding.owasp_category or "ไม่ระบุหมวด" }}</span>
+          <span class="f-tool">{{ finding.tool }}</span>
+          <span class="f-risk">risk {{ "%.1f"|format(finding.risk_score or 0) }}</span>
+        </span>
+        <span class="f-caret">▸</span>
+      </summary>
+      <div class="f-detail">
+        <div class="f-detail-block">
+          <h4>ประเภทช่องโหว่</h4>
+          <p>{{ finding.location_label }}</p>
+        </div>
+        <div class="f-detail-block">
+          <h4>รายละเอียดทางเทคนิค</h4>
+          <p class="mono">{{ finding.location_detail }}</p>
+        </div>
+        <div class="f-detail-block">
+          <h4>คำแนะนำการแก้ไข</h4>
+          <p>{{ finding.remediation_workaround or "ยังไม่มีคำแนะนำเฉพาะสำหรับช่องโหว่นี้ กรุณาประเมินตามระดับความรุนแรงที่ระบุ" }}</p>
+        </div>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  <p class="no-results" id="noResults" hidden>ไม่พบรายการที่ตรงกับตัวกรอง</p>
+</section>
+
+<script>
+  const searchBox = document.getElementById('searchBox');
+  const rows = Array.from(document.querySelectorAll('.finding-row'));
+  const pills = Array.from(document.querySelectorAll('.sev-pill'));
+  const noResults = document.getElementById('noResults');
+  let activeSeverity = 'all';
+
+  function applyFilters() {
+    const query = searchBox.value.trim().toLowerCase();
+    let visibleCount = 0;
+    rows.forEach(row => {
+      const matchesSeverity = activeSeverity === 'all' || row.dataset.severity === activeSeverity;
+      const matchesSearch = !query || row.dataset.search.includes(query);
+      const show = matchesSeverity && matchesSearch;
+      row.hidden = !show;
+      if (show) visibleCount++;
+    });
+    noResults.hidden = visibleCount !== 0;
+  }
+
+  pills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      pills.forEach(p => p.classList.remove('is-active'));
+      pill.classList.add('is-active');
+      activeSeverity = pill.dataset.filter;
+      applyFilters();
+    });
+  });
+
+  searchBox.addEventListener('input', applyFilters);
+</script>
+
+</body>
+</html>

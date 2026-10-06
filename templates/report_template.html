@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="report_style.css">
+</head>
+<body>
+    <h1>รายงานผลการสแกนความปลอดภัย</h1>
+    <div class="summary-box">
+        <p>โปรเจค: {{ project_name }}</p>
+        <p>วันที่สร้างรายงาน:  {{ report_date }}</p>
+    </div>
+
+    <h2>สรุปจำนวนตามระดับความรุนแรง</h2>
+    <table>
+        <tr>
+            <th>ระดับความรุนแรง</th>
+            <th>จำนวน</th>
+        </tr>
+        {% for item in severity_data %}
+        <tr>
+            <td>{{ item.severity }}</td>
+            <td>{{ item.count }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <h2><h2>รายการช่องโหว่ทั้งหมด (เรียงตามความเสี่ยง)</h2></h2>
+    <table>
+        <tr>
+            <th>หัวข้อ</th>
+            <th>ประเภทช่องโหว่</th>
+            <th>รายละเอียดทางเทคนิค</th>
+            <th>คำแนะนำทางเลือก</th>
+            <th>Risk Score</th>
+            <th>ความรุนแรง</th>
+            <th>เครื่องมือ</th>
+            <th>OWASP Category</th>
+        </tr>
+        {% for finding in top_findings %}
+        <tr>
+            <td>{{ finding.title }}</td>
+            <td>{{ finding.location_label }}</td>
+            <td>{{ finding.location_detail }}</td>
+            <td>{{ finding.remediation_workaround or "-" }}</td>
+            <td>{{ finding.risk_score }}</td>
+            <td>{{ finding.severity }}</td>
+            <td>{{ finding.tool }}</td>
+            <td>{{ finding.owasp_category or "ไม่สามารถระบุได้"}}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    
+</body>
+</html>
