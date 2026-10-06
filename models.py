@@ -1,6 +1,7 @@
-from sqlalchemy import String, ForeignKey, Text, Float, JSON
+from sqlalchemy import String, ForeignKey, Text, Float, JSON, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from datetime import datetime
+from sqlalchemy.dialects.postgresql import ARRAY
 
 
 class Base(DeclarativeBase):
@@ -20,9 +21,10 @@ class ScanJob(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"))
-    status: Mapped[int] = mapped_column(String(20), default="queued")    
+    status: Mapped[str] = mapped_column(String(20), default="queued")    
     triggered_by: Mapped[str] = mapped_column(String(50), default="manual")
     created_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    requested_scans: Mapped[list[str]] = mapped_column(ARRAY(String))
 
 class ScanRun(Base):
     __tablename__ = "scan_runs"
@@ -38,6 +40,9 @@ class ScanRun(Base):
 
 class Finding(Base):
     __tablename__ = "findings"
+    __table_args__ = (
+        UniqueConstraint("project_id", "fingerprint", name="uq_findings_project_fingerprint"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     scan_run_id: Mapped[int] = mapped_column(ForeignKey("scan_runs.id"))
@@ -51,8 +56,9 @@ class Finding(Base):
     severity_native: Mapped[str | None] = mapped_column(String(50), nullable=True)
     cvss_score: Mapped[float | None] = mapped_column(nullable=True)
     epss_score: Mapped[float | None] = mapped_column(nullable=True)
+    risk_score: Mapped[float | None] = mapped_column(nullable=True)
     cwe_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    owasp_category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    owasp_category: Mapped[str | None] = mapped_column(String(120), nullable=True)
     confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
     location_type: Mapped[str] = mapped_column(String(20))
     location: Mapped[dict] = mapped_column(JSON)
@@ -75,8 +81,9 @@ class CweOwaspMapping(Base):
     __tablename__ = "cwe_owasp_mapping"
 
     cwe_id: Mapped[str] = mapped_column(String(20), primary_key=True)
-    owasp_top10_2021: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    owasp_top10_2021: Mapped[str | None] = mapped_column(String(128), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    remediation_workaround: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 
@@ -85,7 +92,7 @@ class CweOwaspMapping(Base):
 
 
 
-
+    
 
 
 
