@@ -1,0 +1,20 @@
+# Database
+SQLAlchemy==2.0.52
+alembic==1.19.1
+psycopg2-binary==2.9.12
+
+# Config
+python-dotenv==1.2.3
+
+# Reports
+Jinja2==3.1.6
+weasyprint==70.0
+
+# AI remediation
+google-genai==2.23.0
+
+# API
+fastapi==0.141.1
+
+# Scanners (Trivy และ ZAP ไม่
+semgrep==1.175.0
