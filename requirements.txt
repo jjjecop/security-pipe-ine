@@ -16,5 +16,5 @@ google-genai==2.23.0
 # API
 fastapi==0.141.1
 
-# Scanners (Trivy และ ZAP ไม่
+# Scanners (Trivy and ZAP are not Python packages - install separately)
 semgrep==1.175.0
