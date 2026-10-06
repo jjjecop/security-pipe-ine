@@ -8,3 +8,15 @@ venv/
 
 # Database file (local testing only)
 test.db
+
+# Generated reports / scan output
+reports/
+security_report.pdf
+zap_results.json
+
+# Machine-specific CA bundle (Norton SSL scanning)
+ca-bundle.pem
+
+
+# OWASP Cheat Sheet repo - clone separately: git clone https://github.com/OWASP/CheatSheetSeries
+CheatSheetSeries/
