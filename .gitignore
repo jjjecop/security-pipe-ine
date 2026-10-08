@@ -20,3 +20,6 @@ ca-bundle.pem
 
 # OWASP Cheat Sheet repo - clone separately: git clone https://github.com/OWASP/CheatSheetSeries
 CheatSheetSeries/
+
+# Database backups (contain vulnerability data - keep private)
+backups/
