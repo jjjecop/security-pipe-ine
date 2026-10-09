@@ -55,6 +55,16 @@ def test_semgrep_cwe_is_extracted():
     assert result["cwe_id"] == "CWE-95"
 
 
+
+def test_semgrep_cwe_and_owasp_as_string():
+    # Some Semgrep rules give a plain string instead of a list
+    raw = make_semgrep_raw(10, "app.listen(80)")
+    raw["extra"]["metadata"]["cwe"] = "CWE-352: Cross-Site Request Forgery (CSRF)"
+    raw["extra"]["metadata"]["owasp"] = "A01:2021 - Broken Access Control"
+    result = normalize_semgrep_finding(raw)
+    assert result["cwe_id"] == "CWE-352"
+    assert result["owasp_category"] == "A01:2021 - Broken Access Control"
+
 # ---------- Trivy ----------
 
 def make_trivy_raw(version):

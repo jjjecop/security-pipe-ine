@@ -37,6 +37,7 @@ def save_finding_with_dedup(session, scan_run_id, project_id, normalized):
         existing.severity_native = normalized["severity_native"]
         existing.severity_normalized = severity_normalized
         existing.cvss_score = normalized.get("cvss_score")
+        existing.cwe_id = normalized["cwe_id"]
         existing.risk_score = risk_score
         return "update"
 

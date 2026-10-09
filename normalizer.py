@@ -15,6 +15,15 @@ def semgrep_code_key(raw: dict) -> str:
         return " ".join(lines.split())
     return f"line:{raw['start']['line']}"
 
+def as_list(value) -> list:
+    # Semgrep metadata: some rules use a list, some use a single string
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return list(value)
+
+
 def normalize_semgrep_finding(raw: dict, base_path: str | None = None) -> dict:
     tool_rule_id = raw["check_id"]
     file_path = raw["path"]
@@ -22,8 +31,8 @@ def normalize_semgrep_finding(raw: dict, base_path: str | None = None) -> dict:
         file_path = os.path.relpath(file_path, base_path).replace("\\", "/")
 
     metadata = raw["extra"].get("metadata", {})
-    cwe_list = metadata.get("cwe", [])
-    owasp_list = metadata.get("owasp", [])
+    cwe_list = as_list(metadata.get("cwe"))
+    owasp_list = as_list(metadata.get("owasp"))
 
     return {
         "tool": "semgrep",
