@@ -8,13 +8,14 @@ def normalize_cwe_id(raw_cwe_id: str) -> str | None:
     if not raw_cwe_id:
         return None
 
-    cleaned = raw_cwe_id.strip()
+    cleaned = raw_cwe_id.strip().upper()
 
     if cleaned.startswith("CWE-"):
-        return cleaned
+        cleaned = cleaned[len("CWE-"):]
 
-    if cleaned.isdigit():
-        return f"CWE-{cleaned}"
+    # ZAP ใช้ 0 หรือ -1 แทน "ไม่มี CWE" จึงรับเฉพาะเลขที่มากกว่า 0
+    if cleaned.isdigit() and int(cleaned) > 0:
+        return f"CWE-{int(cleaned)}"
 
     return None
 
