@@ -31,15 +31,13 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements-dev.txt
 ```
+สร้างไฟล์ `.env` จากไฟล์ตัวอย่าง แล้วเปิดไปเติมรหัสผ่านและ API key:
 
-สร้างไฟล์ `.env` ที่ root ของโปรเจ
+```powershell
+Copy-Item .env.example .env
+code .env
+```
 
-```
-POSTGRES_USER=secpipeline
-POSTGRES_PASSWORD=ตั้งรหัสผ่านเอง
-POSTGRES_DB=secpipeline
-GEMINI_API_KEY=ใส่ API key ของ
-```
 
 > ห้าม commit ไฟล์ `.env` เด็ดขาด (อยู่ใน `.gitignore` แล้ว)
 
@@ -71,6 +69,12 @@ python run_pipeline.py --proje
                                                                                          ```powershell
 python run_pipeline.py --project NodeGoat --repo C:\Allprojects\Targets\NodeGoat --scans sast
 ```
+
+ให้ Gemini เขียนคำแนะนำการแก้ไขให้ CWE ที่ยังไม่มีด้วย (ประมาณ 13-40 วินาทีต่อ CWE และต้อง clone [OWASP CheatSheetSeries](https://github.com/OWASP/CheatSheetSeries) ไว้ในโฟลเดอร์โปรเจกต์ก่อน):
+
+```powershell
+python run_pipeline.py --project NodeGoat --repo C:\Allprojects\Targets\NodeGoat --with-remediation
+
 
 รายงานจะอยู่ที่ `reports\<ชื่อโปรเจกต์>_<วันเวลา>\`
 - `dashboard.html` เปิดในเบราว์เ
