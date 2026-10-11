@@ -129,6 +129,7 @@ def build_report_data(session, project_id: int):
         top_findings_data.append({
             "title": primary.title,
             "risk_score": primary.risk_score,
+            "epss_score": primary.epss_score,
             "tool": ", ".join(sources),
             "severity": primary.severity_normalized,
             "owasp_category": primary.owasp_category,

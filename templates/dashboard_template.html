@@ -68,6 +68,7 @@
           <span class="f-owasp">{{ finding.owasp_category or "ไม่ระบุหมวด" }}</span>
           <span class="f-tool">{{ finding.tool }}</span>
           <span class="f-risk">risk {{ "%.1f"|format(finding.risk_score or 0) }}</span>
+          {% if finding.epss_score is not none %}<span class="f-tag">EPSS {{ "%.1f%%"|format(finding.epss_score * 100) }}</span>{% endif %}
         </span>
         <span class="f-caret">▸</span>
       </summary>
@@ -80,6 +81,13 @@
           <h4>รายละเอียดทางเทคนิค</h4>
           <p class="mono">{{ finding.location_detail }}</p>
         </div>
+
+        {% if finding.epss_score is not none %}
+        <div class="f-detail-block">
+          <h4>โอกาสถูกโจมตีจริงใน 30 วัน (EPSS)</h4>
+          <p>{{ "%.1f%%"|format(finding.epss_score * 100) }} ตามข้อมูลจาก FIRST.org</p>
+        </div>
+        {% endif %}
         <div class="f-detail-block">
           <h4>คำแนะนำการแก้ไข</h4>
           <p>{{ finding.remediation_workaround or "ยังไม่มีคำแนะนำเฉพาะสำหรับช่องโหว่นี้ กรุณาประเมินตามระดับความรุนแรงที่ระบุ" }}</p>

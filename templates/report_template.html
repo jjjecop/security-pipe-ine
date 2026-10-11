@@ -26,7 +26,7 @@
         </tr>
         {% endfor %}
     </table>
-    <h2><h2>รายการช่องโหว่ทั้งหมด (เรียงตามความเสี่ยง)</h2></h2>
+    <h2>รายการช่องโหว่ทั้งหมด (เรียงตามความเสี่ยง)</h2>
     <table>
         <tr>
             <th>หัวข้อ</th>
@@ -34,6 +34,7 @@
             <th>รายละเอียดทางเทคนิค</th>
             <th>คำแนะนำทางเลือก</th>
             <th>Risk Score</th>
+            <th>EPSS</th>
             <th>ความรุนแรง</th>
             <th>เครื่องมือ</th>
             <th>OWASP Category</th>
@@ -45,6 +46,7 @@
             <td>{{ finding.location_detail }}</td>
             <td>{{ finding.remediation_workaround or "-" }}</td>
             <td>{{ finding.risk_score }}</td>
+            <td>{{ "%.1f%%"|format(finding.epss_score * 100) if finding.epss_score is not none else "-" }}</td>
             <td>{{ finding.severity }}</td>
             <td>{{ finding.tool }}</td>
             <td>{{ finding.owasp_category or "ไม่สามารถระบุได้"}}</td>
