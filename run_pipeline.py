@@ -13,6 +13,7 @@ from save_findings import SCAN_TYPES, get_or_create_project, run_scan_job
 from apply_cwe_mapping import apply_cwe_mapping
 from generate_report import generate_report
 from generate_remediation import generate_remediation, get_project_cwe_ids
+from epss import apply_epss
 
 
 def parse_args():
@@ -35,6 +36,7 @@ def parse_args():
     parser.add_argument("--output-dir", default="reports", help="โฟลเดอร์เก็บรายงาน (ค่าเริ่มต้น: reports)")
     parser.add_argument("--no-report", action="store_true", help="สแกนอย่างเดียว ไม่สร้างรายงาน")
     parser.add_argument("--with-remediation", action="store_true", help="ให้ Gemini เขียนคำแนะนำการแก้ไขให้ CWE ที่ยังไม่มี (ประมาณ 13-40 วินาทีต่อ CWE)")
+    parser.add_argument("--no-epss", action="store_true", help="ไม่ดึงคะแนน EPSS จาก FIRST.org (ใช้ตอนไม่มี internet)")
 
     args = parser.parse_args()
 
@@ -87,6 +89,15 @@ def main():
 
         print("\n=== จับคู่ CWE -> OWASP Top 10 ===")
         apply_cwe_mapping(session, project_id=project.id)
+
+        if not args.no_epss:
+            print("\n=== ดึงคะแนน EPSS จาก FIRST.org ===")
+            try:
+                apply_epss(session, project.id)
+            except Exception as e:
+                session.rollback()
+                print(f"ดึง EPSS ไม่สำเร็จ: {e}")
+                print("ยังสร้างรายงานต่อได้ แต่ risk score จะไม่รวม EPSS")
 
         if args.with_remediation:
             print("\n=== สร้างคำแนะนำการแก้ไขด้วย Gemini ===")

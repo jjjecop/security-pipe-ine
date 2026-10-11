@@ -38,7 +38,8 @@ def save_finding_with_dedup(session, scan_run_id, project_id, normalized):
         existing.severity_normalized = severity_normalized
         existing.cvss_score = normalized.get("cvss_score")
         existing.cwe_id = normalized["cwe_id"]
-        existing.risk_score = risk_score
+        # ใช้ EPSS เดิมที่ดึงไว้ เพื่อไม่ให้ risk score ตกลงทุกครั้งที่สแกนใหม่
+        existing.risk_score = calculate_risk_score(severity_normalized, existing.cvss_score, existing.epss_score)
         return "update"
 
     finding = Finding(
