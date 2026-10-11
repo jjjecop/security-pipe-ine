@@ -29,3 +29,18 @@ def test_risk_score_averages_base_and_cvss():
 
 def test_risk_score_without_cvss_uses_base():
     assert calculate_risk_score("high", None) == 7.0
+
+def test_risk_score_without_epss_is_unchanged():
+    assert calculate_risk_score("critical", 9.5, epss_score=None) == 9.25
+
+
+def test_high_epss_raises_risk_score():
+    assert calculate_risk_score("high", 7.0, epss_score=0.9) == 9.7
+
+
+def test_low_epss_barely_changes_risk_score():
+    assert calculate_risk_score("high", 7.0, epss_score=0.01) == 7.03
+
+
+def test_risk_score_is_capped_at_10():
+    assert calculate_risk_score("critical", 9.8, epss_score=0.95) == 10.0

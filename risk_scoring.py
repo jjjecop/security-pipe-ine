@@ -29,13 +29,23 @@ SEVERITY_BASE_SCORE = {
 }
 
 
-def calculate_risk_score(severity_normalized: str, cvss_score: float | None) -> float:
+# EPSS = โอกาสถูกโจมตีจริงใน 30 วัน (0-1) บวกเพิ่มได้สูงสุด 3 คะแนน
+EPSS_WEIGHT = 3.0
+MAX_RISK_SCORE = 10.0
+
+
+def calculate_risk_score(severity_normalized: str, cvss_score: float | None, epss_score: float | None = None) -> float:
     base_score = SEVERITY_BASE_SCORE.get(severity_normalized, 1.0)
 
     if cvss_score is not None:
-        return round((base_score + cvss_score) / 2, 2)
+        score = (base_score + cvss_score) / 2
+    else:
+        score = base_score
 
-    return base_score
+    if epss_score is not None:
+        score += EPSS_WEIGHT * epss_score
+
+    return round(min(score, MAX_RISK_SCORE), 2)
 
 
 if __name__ == "__main__":
