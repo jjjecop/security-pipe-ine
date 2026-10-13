@@ -1,5 +1,8 @@
 import os
 import secrets
+from typing import Literal
+
+import redis
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.security import APIKeyHeader
@@ -8,6 +11,10 @@ from sqlalchemy.orm import Session
 
 from db import engine
 from models import Finding, Project, ScanJob, ScanRun
+from pydantic import BaseModel, Field
+from save_findings import create_scan_job, get_or_create_project
+from scan_policy import is_repo_allowed, is_url_allowed, resolve_scans, split_setting
+from scan_queue import enqueue_scan
 
 app = FastAPI(title="VulnCompass API", description="ดูผลสแกนช่องโหว่จากฐานข้อมูล")
 
@@ -143,4 +150,59 @@ def get_scan_job(job_id: int, session: Session = Depends(get_session)):
             }
             for r in runs
         ],
+    }
+
+
+class ScanRequest(BaseModel):
+    project: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$")
+    scans: list[Literal["sast", "dependency", "container", "dast"]] | None = None
+    repo_path: str | None = Field(None, max_length=500)
+    # ห้ามขึ้นต้นด้วย - เพื่อไม่ให้ Trivy อ่านเป็น option และห้ามมีช่องว่างหรือ ;
+    image: str | None = Field(None, max_length=255, pattern=r"^[A-Za-z0-9][A-Za-z0-9._/:@-]*$")
+    target_url: str | None = Field(None, max_length=500)
+    with_remediation: bool = False
+
+
+@app.post("/scans", status_code=202, dependencies=[Depends(require_api_key)])
+def create_scan(request: ScanRequest, session: Session = Depends(get_session)):
+    try:
+        scans = resolve_scans(request.scans, request.repo_path, request.image, request.target_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    repo_path = None
+    if request.repo_path:
+        allowed_roots = split_setting(os.getenv("SCAN_ALLOWED_REPO_ROOTS"), ";")
+        if not is_repo_allowed(request.repo_path, allowed_roots):
+            raise HTTPException(status_code=400, detail="repo_path ไม่อยู่ในโฟลเดอร์ที่อนุญาต (SCAN_ALLOWED_REPO_ROOTS)")
+        if not os.path.isdir(request.repo_path):
+            raise HTTPException(status_code=400, detail="ไม่พบโฟลเดอร์ repo_path")
+        repo_path = os.path.realpath(request.repo_path)
+
+    if request.target_url:
+        allowed_hosts = split_setting(os.getenv("SCAN_ALLOWED_HOSTS"), ",")
+        if not is_url_allowed(request.target_url, allowed_hosts):
+            raise HTTPException(status_code=400, detail="target_url ไม่อยู่ในรายชื่อ host ที่อนุญาต (SCAN_ALLOWED_HOSTS)")
+
+    project = get_or_create_project(session, request.project, repo_path=repo_path, target_url=request.target_url)
+    scan_job = create_scan_job(session, project, scans, triggered_by="api")
+
+    try:
+        enqueue_scan(
+            scan_job.id,
+            repo_path=repo_path,
+            image=request.image,
+            target_url=request.target_url,
+            with_remediation=request.with_remediation,
+        )
+    except redis.exceptions.RedisError:
+        # ถ้าใส่คิวไม่ได้ งานจะค้าง queued ตลอดไป จึงต้องตั้งเป็น failed ทันที
+        scan_job.status = "failed"
+        session.commit()
+        raise HTTPException(status_code=503, detail="ใส่งานเข้าคิวไม่ได้ (Redis ไม่ทำงาน)")
+
+    return {
+        "scan_job_id": scan_job.id,
+        "status": scan_job.status,
+        "status_url": f"/scan-jobs/{scan_job.id}",
     }
