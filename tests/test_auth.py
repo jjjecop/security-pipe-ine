@@ -1,4 +1,4 @@
-from auth import hash_password, verify_password, password_problem
+from auth import hash_password, verify_password, password_problem, LoginRateLimiter
 
 
 def test_hash_does_not_contain_password():
@@ -38,3 +38,37 @@ def test_password_without_symbols_is_accepted():
 
 def test_extremely_long_password_is_rejected():
     assert password_problem("a" * 129) is not None
+
+
+
+class FakeClock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+
+def test_login_blocked_after_too_many_failures():
+    limiter = LoginRateLimiter(max_attempts=3, window_seconds=60, clock=FakeClock())
+    for _ in range(3):
+        limiter.record_failure("1.2.3.4:admin")
+    assert limiter.is_blocked("1.2.3.4:admin")
+    assert not limiter.is_blocked("1.2.3.4:other")
+
+
+def test_login_block_expires_after_window():
+    clock = FakeClock()
+    limiter = LoginRateLimiter(max_attempts=3, window_seconds=60, clock=clock)
+    for _ in range(3):
+        limiter.record_failure("1.2.3.4:admin")
+    clock.now = 61
+    assert not limiter.is_blocked("1.2.3.4:admin")
+
+
+def test_successful_login_resets_counter():
+    limiter = LoginRateLimiter(max_attempts=3, window_seconds=60, clock=FakeClock())
+    for _ in range(3):
+        limiter.record_failure("1.2.3.4:admin")
+    limiter.reset("1.2.3.4:admin")
+    assert not limiter.is_blocked("1.2.3.4:admin")

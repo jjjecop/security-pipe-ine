@@ -1,18 +1,21 @@
 import os
 import secrets
+from datetime import datetime
 from typing import Literal
 
 import redis
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.security import APIKeyHeader
 from fastapi.responses import FileResponse
+from starlette.middleware.sessions import SessionMiddleware
 
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from db import engine
-from models import Finding, Project, Report, ScanJob, ScanRun
+from models import Finding, Project, Report, ScanJob, ScanRun, User
+from auth import LoginRateLimiter, hash_password, verify_password
 from pydantic import BaseModel, Field
 from save_findings import create_scan_job, get_or_create_project
 from scan_policy import is_repo_allowed, is_url_allowed, resolve_scans, split_setting
@@ -22,6 +25,23 @@ from scan_queue import enqueue_scan
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REPORTS_DIR = os.path.join(BASE_DIR, "reports")
 app = FastAPI(title="VulnCompass API", description="ดูผลสแกนช่องโหว่จากฐานข้อมูล")
+
+SESSION_MAX_AGE = 8 * 60 * 60
+
+session_secret = os.getenv("SESSION_SECRET")
+if not session_secret:
+    # ไม่มีค่าใน .env ให้สุ่มใหม่ทุกครั้งที่เปิด API: ยังปลอดภัย แต่ทุกคนต้อง login ใหม่หลัง restart
+    session_secret = secrets.token_urlsafe(32)
+    print("คำเตือน: ไม่ได้ตั้ง SESSION_SECRET ใน .env ทุกคนจะต้อง login ใหม่ทุกครั้งที่ restart API")
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=session_secret,
+    session_cookie="vc_session",
+    max_age=SESSION_MAX_AGE,
+    same_site="strict",
+    https_only=os.getenv("SESSION_HTTPS_ONLY", "false").lower() == "true",
+)
 
 
 def get_session():
@@ -257,3 +277,59 @@ def download_latest_project_report(project_name: str, session: Session = Depends
         raise HTTPException(status_code=404, detail="โปรเจกต์นี้ยังไม่มีรายงาน")
 
     return report_file_response(report, project.name)
+
+
+# ใช้ตอนไม่พบ user ให้ใช้เวลาตรวจเท่ากับ user ที่มีอยู่จริง
+# คนร้ายจะจับเวลาตอบกลับแล้วเดาไม่ได้ว่า username ไหนมีอยู่ในระบบ
+DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-timing")
+login_limiter = LoginRateLimiter(max_attempts=5, window_seconds=15 * 60)
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=50)
+    password: str = Field(min_length=1, max_length=128)
+
+
+@app.post("/auth/login")
+def login(body: LoginRequest, request: Request, db: Session = Depends(get_session)):
+    client_ip = request.client.host if request.client else "unknown"
+    limit_key = f"{client_ip}:{body.username.lower()}"
+    if login_limiter.is_blocked(limit_key):
+        raise HTTPException(status_code=429, detail="login ผิดหลายครั้งเกินไป กรุณารอ 15 นาที")
+
+    user = db.query(User).filter(User.username == body.username).first()
+    password_ok = verify_password(user.password_hash if user else DUMMY_PASSWORD_HASH, body.password)
+    if user is None or not password_ok or not user.is_active:
+        login_limiter.record_failure(limit_key)
+        # ข้อความเดียวกันทุกกรณี ไม่บอกว่าผิดที่ username หรือรหัสผ่าน
+        raise HTTPException(status_code=401, detail="username หรือรหัสผ่านไม่ถูกต้อง")
+
+    login_limiter.reset(limit_key)
+    user.last_login_at = datetime.utcnow()
+    db.commit()
+
+    request.session.clear()
+    request.session["user_id"] = user.id
+    return {"username": user.username}
+
+
+def get_current_user(request: Request, db: Session = Depends(get_session)) -> User:
+    user_id = request.session.get("user_id")
+    user = db.get(User, user_id) if user_id else None
+    # เช็ก is_active ทุกครั้ง: ปิดบัญชีแล้ว cookie เก่าต้องใช้ไม่ได้ทันที
+    if user is None or not user.is_active:
+        request.session.clear()
+        raise HTTPException(status_code=401, detail="กรุณา login")
+    return user
+
+
+@app.get("/auth/me")
+def me(user: User = Depends(get_current_user)):
+    return {"username": user.username}
+
+
+@app.post("/auth/logout")
+def logout(request: Request):
+    request.session.clear()
+    return {"status": "logged out"}
+
