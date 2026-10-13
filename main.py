@@ -1,4 +1,8 @@
+import os
+import secrets
+
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.security import APIKeyHeader
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
@@ -12,6 +16,18 @@ def get_session():
     # เปิด session ใหม่ทุก request แล้วปิดให้เองเมื่อตอบเสร็จ
     with Session(engine) as session:
         yield session
+
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def require_api_key(api_key: str | None = Depends(api_key_header)):
+    expected = os.getenv("API_KEY")
+    if not expected:
+        # ถ้าลืมตั้ง API_KEY ให้ปฏิเสธทุก request แทนการเปิดให้เข้าได้หมด
+        raise HTTPException(status_code=503, detail="ยังไม่ได้ตั้ง API_KEY ใน .env")
+    if api_key is None or not secrets.compare_digest(api_key, expected):
+        raise HTTPException(status_code=401, detail="API key ไม่ถูกต้อง")
 
 
 def get_project_or_404(session, project_name: str) -> Project:
@@ -30,7 +46,7 @@ def health_check(session: Session = Depends(get_session)):
     return {"status": "ok", "database": "ok"}
 
 
-@app.get("/projects")
+@app.get("/projects", dependencies=[Depends(require_api_key)])
 def list_projects(session: Session = Depends(get_session)):
     open_counts = dict(
         session.query(Finding.project_id, func.count(Finding.id))
@@ -51,7 +67,7 @@ def list_projects(session: Session = Depends(get_session)):
     ]
 
 
-@app.get("/projects/{project_name}/findings")
+@app.get("/projects/{project_name}/findings", dependencies=[Depends(require_api_key)])
 def list_findings(
     project_name: str,
     status: str = "open",
@@ -104,7 +120,7 @@ def list_findings(
             for f in findings
         ],
     }
-@app.get("/scan-jobs/{job_id}")
+@app.get("/scan-jobs/{job_id}", dependencies=[Depends(require_api_key)])
 def get_scan_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(ScanJob, job_id)
     if job is None:
