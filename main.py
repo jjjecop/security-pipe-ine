@@ -6,16 +6,21 @@ import redis
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.security import APIKeyHeader
+from fastapi.responses import FileResponse
+
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from db import engine
-from models import Finding, Project, ScanJob, ScanRun
+from models import Finding, Project, Report, ScanJob, ScanRun
 from pydantic import BaseModel, Field
 from save_findings import create_scan_job, get_or_create_project
 from scan_policy import is_repo_allowed, is_url_allowed, resolve_scans, split_setting
 from scan_queue import enqueue_scan
 
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+REPORTS_DIR = os.path.join(BASE_DIR, "reports")
 app = FastAPI(title="VulnCompass API", description="ดูผลสแกนช่องโหว่จากฐานข้อมูล")
 
 
@@ -206,3 +211,49 @@ def create_scan(request: ScanRequest, session: Session = Depends(get_session)):
         "status": scan_job.status,
         "status_url": f"/scan-jobs/{scan_job.id}",
     }
+
+def report_file_response(report: Report, project_name: str) -> FileResponse:
+    path = report.file_path or ""
+    if not os.path.isabs(path):
+        path = os.path.join(BASE_DIR, path)
+    # file_path มาจากฐานข้อมูล ตรวจซ้ำว่าอยู่ใต้ reports/ จริง ไม่อย่างนั้นอาจส่งไฟล์อย่าง .env ออกไปได้
+    if not is_repo_allowed(path, [REPORTS_DIR]) or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="ไม่พบไฟล์รายงาน")
+    filename = f"{project_name}_scanjob{report.scan_job_id}_security_report.pdf"
+    return FileResponse(path, media_type="application/pdf", filename=filename)
+
+
+@app.get("/scan-jobs/{job_id}/report", dependencies=[Depends(require_api_key)])
+def download_scan_job_report(job_id: int, session: Session = Depends(get_session)):
+    job = session.get(ScanJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"ไม่พบ ScanJob {job_id}")
+
+    report = (
+        session.query(Report)
+        .filter(Report.scan_job_id == job.id)
+        .order_by(Report.id.desc())
+        .first()
+    )
+    if report is None:
+        raise HTTPException(status_code=404, detail="ScanJob นี้ยังไม่มีรายงาน (ยังสแกนไม่เสร็จ หรือสั่งแบบไม่สร้างรายงาน)")
+
+    project = session.get(Project, job.project_id)
+    return report_file_response(report, project.name)
+
+
+@app.get("/projects/{project_name}/report", dependencies=[Depends(require_api_key)])
+def download_latest_project_report(project_name: str, session: Session = Depends(get_session)):
+    project = get_project_or_404(session, project_name)
+
+    report = (
+        session.query(Report)
+        .join(ScanJob, Report.scan_job_id == ScanJob.id)
+        .filter(ScanJob.project_id == project.id)
+        .order_by(Report.id.desc())
+        .first()
+    )
+    if report is None:
+        raise HTTPException(status_code=404, detail="โปรเจกต์นี้ยังไม่มีรายงาน")
+
+    return report_file_response(report, project.name)
