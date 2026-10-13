@@ -15,6 +15,7 @@ google-genai==2.23.0
 
 # API
 fastapi==0.141.1
+uvicorn==0.52.4
 
 # Scanners (Trivy and ZAP are not Python packages - install separately)
 semgrep==1.175.0
