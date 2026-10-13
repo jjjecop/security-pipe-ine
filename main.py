@@ -62,6 +62,30 @@ def require_api_key(api_key: str | None = Depends(api_key_header)):
         raise HTTPException(status_code=401, detail="API key ไม่ถูกต้อง")
 
 
+def get_current_user(request: Request, db: Session = Depends(get_session)) -> User:
+    user_id = request.session.get("user_id")
+    user = db.get(User, user_id) if user_id else None
+    # เช็ก is_active ทุกครั้ง: ปิดบัญชีแล้ว cookie เก่าต้องใช้ไม่ได้ทันที
+    if user is None or not user.is_active:
+        request.session.clear()
+        raise HTTPException(status_code=401, detail="กรุณา login")
+    return user
+
+
+def require_auth(
+    request: Request,
+    api_key: str | None = Depends(api_key_header),
+    db: Session = Depends(get_session),
+) -> str:
+    # CI/CD ส่ง API key มา ส่วน browser ส่ง session cookie มา ผ่านอย่างใดอย่างหนึ่งก็พอ
+    # คืนค่าว่าใครเป็นคนเรียก เพื่อบันทึกลง triggered_by
+    if api_key is not None:
+        require_api_key(api_key)
+        return "api"
+    user = get_current_user(request, db)
+    return f"web:{user.username}"
+
+
 def get_project_or_404(session, project_name: str) -> Project:
     project = session.query(Project).filter(Project.name == project_name).first()
     if project is None:
@@ -78,7 +102,7 @@ def health_check(session: Session = Depends(get_session)):
     return {"status": "ok", "database": "ok"}
 
 
-@app.get("/projects", dependencies=[Depends(require_api_key)])
+@app.get("/projects", dependencies=[Depends(require_auth)])
 def list_projects(session: Session = Depends(get_session)):
     open_counts = dict(
         session.query(Finding.project_id, func.count(Finding.id))
@@ -99,7 +123,7 @@ def list_projects(session: Session = Depends(get_session)):
     ]
 
 
-@app.get("/projects/{project_name}/findings", dependencies=[Depends(require_api_key)])
+@app.get("/projects/{project_name}/findings", dependencies=[Depends(require_auth)])
 def list_findings(
     project_name: str,
     status: str = "open",
@@ -152,7 +176,7 @@ def list_findings(
             for f in findings
         ],
     }
-@app.get("/scan-jobs/{job_id}", dependencies=[Depends(require_api_key)])
+@app.get("/scan-jobs/{job_id}", dependencies=[Depends(require_auth)])
 def get_scan_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(ScanJob, job_id)
     if job is None:
@@ -188,8 +212,12 @@ class ScanRequest(BaseModel):
     with_remediation: bool = False
 
 
-@app.post("/scans", status_code=202, dependencies=[Depends(require_api_key)])
-def create_scan(request: ScanRequest, session: Session = Depends(get_session)):
+@app.post("/scans", status_code=202)
+def create_scan(
+    request: ScanRequest,
+    triggered_by: str = Depends(require_auth),
+    session: Session = Depends(get_session),
+):
     try:
         scans = resolve_scans(request.scans, request.repo_path, request.image, request.target_url)
     except ValueError as e:
@@ -210,7 +238,7 @@ def create_scan(request: ScanRequest, session: Session = Depends(get_session)):
             raise HTTPException(status_code=400, detail="target_url ไม่อยู่ในรายชื่อ host ที่อนุญาต (SCAN_ALLOWED_HOSTS)")
 
     project = get_or_create_project(session, request.project, repo_path=repo_path, target_url=request.target_url)
-    scan_job = create_scan_job(session, project, scans, triggered_by="api")
+    scan_job = create_scan_job(session, project, scans, triggered_by=triggered_by)
 
     try:
         enqueue_scan(
@@ -243,7 +271,7 @@ def report_file_response(report: Report, project_name: str) -> FileResponse:
     return FileResponse(path, media_type="application/pdf", filename=filename)
 
 
-@app.get("/scan-jobs/{job_id}/report", dependencies=[Depends(require_api_key)])
+@app.get("/scan-jobs/{job_id}/report", dependencies=[Depends(require_auth)])
 def download_scan_job_report(job_id: int, session: Session = Depends(get_session)):
     job = session.get(ScanJob, job_id)
     if job is None:
@@ -262,7 +290,7 @@ def download_scan_job_report(job_id: int, session: Session = Depends(get_session
     return report_file_response(report, project.name)
 
 
-@app.get("/projects/{project_name}/report", dependencies=[Depends(require_api_key)])
+@app.get("/projects/{project_name}/report", dependencies=[Depends(require_auth)])
 def download_latest_project_report(project_name: str, session: Session = Depends(get_session)):
     project = get_project_or_404(session, project_name)
 
@@ -311,16 +339,6 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_sessio
     request.session.clear()
     request.session["user_id"] = user.id
     return {"username": user.username}
-
-
-def get_current_user(request: Request, db: Session = Depends(get_session)) -> User:
-    user_id = request.session.get("user_id")
-    user = db.get(User, user_id) if user_id else None
-    # เช็ก is_active ทุกครั้ง: ปิดบัญชีแล้ว cookie เก่าต้องใช้ไม่ได้ทันที
-    if user is None or not user.is_active:
-        request.session.clear()
-        raise HTTPException(status_code=401, detail="กรุณา login")
-    return user
 
 
 @app.get("/auth/me")
