@@ -9,11 +9,8 @@ sys.stderr.reconfigure(encoding="utf-8")
 from sqlalchemy.orm import Session
 
 from db import engine
-from save_findings import SCAN_TYPES, get_or_create_project, run_scan_job
-from apply_cwe_mapping import apply_cwe_mapping
-from generate_report import generate_report
-from generate_remediation import generate_remediation, get_project_cwe_ids
-from epss import apply_epss
+from save_findings import SCAN_TYPES, get_or_create_project, create_scan_job
+from pipeline import run_full_pipeline
 
 
 def parse_args():
@@ -77,40 +74,20 @@ def main():
 
     with Session(engine) as session:
         project = get_or_create_project(session, args.project, repo_path=args.repo, target_url=args.url)
+        scan_job = create_scan_job(session, project, args.scans, triggered_by="cli")
 
-        scan_job = run_scan_job(
+        run_full_pipeline(
             session,
             project,
-            args.scans,
+            scan_job,
             repo_path=args.repo,
             image=args.image,
             target_url=args.url,
+            with_remediation=args.with_remediation,
+            use_epss=not args.no_epss,
+            make_report=not args.no_report,
+            output_dir=args.output_dir,
         )
-
-        print("\n=== จับคู่ CWE -> OWASP Top 10 ===")
-        apply_cwe_mapping(session, project_id=project.id)
-
-        if not args.no_epss:
-            print("\n=== ดึงคะแนน EPSS จาก FIRST.org ===")
-            try:
-                apply_epss(session, project.id)
-            except Exception as e:
-                session.rollback()
-                print(f"ดึง EPSS ไม่สำเร็จ: {e}")
-                print("ยังสร้างรายงานต่อได้ แต่ risk score จะไม่รวม EPSS")
-
-        if args.with_remediation:
-            print("\n=== สร้างคำแนะนำการแก้ไขด้วย Gemini ===")
-            try:
-                generate_remediation(session, cwe_ids=get_project_cwe_ids(session, project.id))
-            except Exception as e:
-                session.rollback()
-                print(f"สร้างคำแนะนำไม่สำเร็จ: {e}")
-                print("ยังสร้างรายงานต่อได้ แต่บาง CWE จะไม่มีคำแนะนำ")
-
-        if not args.no_report:
-            print("\n=== สร้างรายงาน ===")
-            generate_report(session, project, scan_job_id=scan_job.id, output_dir=args.output_dir)
 
         failed = scan_job.status == "failed"
 

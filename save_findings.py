@@ -184,18 +184,24 @@ def run_single_scan(session, scan_job, project, tool, collector) -> bool:
         return False
 
 
-def run_scan_job(session: Session, project: Project, scans: list[str], repo_path=None, image=None, target_url=None) -> ScanJob:
+def create_scan_job(session: Session, project: Project, scans: list[str], triggered_by: str = "manual") -> ScanJob:
     scan_job = ScanJob(
         project_id=project.id,
         requested_scans=scans,
-        status="running",
-        triggered_by="manual",
+        status="queued",
+        triggered_by=triggered_by,
         created_at=datetime.utcnow(),
     )
     session.add(scan_job)
     session.commit()
     session.refresh(scan_job)
     print("สร้าง ScanJob id:", scan_job.id, "| สแกน:", ", ".join(scans))
+    return scan_job
+
+
+def execute_scan_job(session: Session, scan_job: ScanJob, project: Project, repo_path=None, image=None, target_url=None) -> ScanJob:
+    scan_job.status = "running"
+    session.commit()
 
     plan = {
         "sast": ("semgrep", lambda: collect_semgrep(repo_path)),
@@ -205,7 +211,7 @@ def run_scan_job(session: Session, project: Project, scans: list[str], repo_path
     }
 
     results = []
-    for scan_type in scans:
+    for scan_type in scan_job.requested_scans:
         tool, collector = plan[scan_type]
         results.append(run_single_scan(session, scan_job, project, tool, collector))
 
