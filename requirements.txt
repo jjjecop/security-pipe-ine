@@ -19,3 +19,9 @@ uvicorn==0.52.4
 
 # Scanners (Trivy and ZAP are not Python packages - install separately)
 semgrep==1.175.0
+
+#Job queue
+redis==8.1.0
+
+# Web login
+argon2-cffi==25.1.0
