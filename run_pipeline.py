@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from db import engine
 from save_findings import SCAN_TYPES, get_or_create_project, create_scan_job
 from pipeline import run_full_pipeline
+from scan_queue import enqueue_scan
 
 
 def parse_args():
@@ -34,6 +35,7 @@ def parse_args():
     parser.add_argument("--no-report", action="store_true", help="สแกนอย่างเดียว ไม่สร้างรายงาน")
     parser.add_argument("--with-remediation", action="store_true", help="ให้ Gemini เขียนคำแนะนำการแก้ไขให้ CWE ที่ยังไม่มี (ประมาณ 13-40 วินาทีต่อ CWE)")
     parser.add_argument("--no-epss", action="store_true", help="ไม่ดึงคะแนน EPSS จาก FIRST.org (ใช้ตอนไม่มี internet)")
+    parser.add_argument("--queue", action="store_true", help="ใส่งานเข้าคิวให้ worker.py สแกนแทน แล้วจบทันที")
 
     args = parser.parse_args()
 
@@ -75,6 +77,16 @@ def main():
     with Session(engine) as session:
         project = get_or_create_project(session, args.project, repo_path=args.repo, target_url=args.url)
         scan_job = create_scan_job(session, project, args.scans, triggered_by="cli")
+        if args.queue:
+            enqueue_scan(
+                scan_job.id,
+                repo_path=args.repo,
+                image=args.image,
+                target_url=args.url,
+                with_remediation=args.with_remediation,
+            )
+            print(f"ใส่ ScanJob {scan_job.id} เข้าคิวเเล้ว ให้ worker.py เป็นคนสแกน")
+            return
 
         run_full_pipeline(
             session,
