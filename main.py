@@ -176,6 +176,56 @@ def list_findings(
             for f in findings
         ],
     }
+
+
+SEVERITY_ORDER = ("critical", "high", "medium", "low", "info")
+
+
+@app.get("/projects/{project_name}/summary", dependencies=[Depends(require_auth)])
+def project_summary(project_name: str, session: Session = Depends(get_session)):
+    project = get_project_or_404(session, project_name)
+    open_findings = (
+        session.query(Finding)
+        .filter(Finding.project_id == project.id)
+        .filter(Finding.status == "open")
+    )
+
+    # ให้ฐานข้อมูลนับด้วย GROUP BY แทนการดึงทุกแถวมานับใน Python
+    severity_counts = dict(
+        open_findings.with_entities(Finding.severity_normalized, func.count(Finding.id))
+        .group_by(Finding.severity_normalized)
+        .all()
+    )
+    tool_counts = dict(
+        open_findings.with_entities(Finding.tool, func.count(Finding.id))
+        .group_by(Finding.tool)
+        .all()
+    )
+
+    last_job = (
+        session.query(ScanJob)
+        .filter(ScanJob.project_id == project.id)
+        .order_by(ScanJob.id.desc())
+        .first()
+    )
+    last_scan = None
+    if last_job is not None:
+        last_scan = {
+            "id": last_job.id,
+            "status": last_job.status,
+            "triggered_by": last_job.triggered_by,
+            "created_at": last_job.created_at,
+        }
+
+    return {
+        "project": project.name,
+        "open_total": sum(severity_counts.values()),
+        "by_severity": {severity: severity_counts.get(severity, 0) for severity in SEVERITY_ORDER},
+        "by_tool": tool_counts,
+        "last_scan": last_scan,
+    }
+
+
 @app.get("/scan-jobs/{job_id}", dependencies=[Depends(require_auth)])
 def get_scan_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(ScanJob, job_id)

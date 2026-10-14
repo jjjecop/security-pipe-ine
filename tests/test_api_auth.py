@@ -29,3 +29,7 @@ def test_api_refuses_when_api_key_not_configured(monkeypatch):
 def test_report_download_requires_api_key(monkeypatch, url):
     monkeypatch.setenv("API_KEY", "test-key")
     assert client.get(url).status_code == 401
+
+def test_summary_requires_login_or_api_key(monkeypatch):
+    monkeypatch.setenv("API_KEY", "test-key")
+    assert client.get("/projects/NodeGoat/summary").status_code == 401
