@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiError, apiFetch } from './api'
 import LoginPage from './LoginPage'
+import Dashboard from './Dashboard'
 import './App.css'
 
 function App() {
@@ -36,8 +37,8 @@ function App() {
         </button>
       </header>
       <main className="content">
-        <h2>Dashboard</h2>
-        <p className="muted">หน้านี้จะแสดงสรุปช่องโหว่ใน C5.3</p>
+         <Dashboard />
+        
       </main>
     </div>
   )
