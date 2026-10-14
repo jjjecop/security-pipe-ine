@@ -1,31 +1,45 @@
 import { useEffect, useState } from 'react'
-
-type Health = {
-  status: string
-  database: string
-}
+import { ApiError, apiFetch } from './api'
+import LoginPage from './LoginPage'
+import './App.css'
 
 function App() {
-  const [health, setHealth] = useState<Health | null>(null)
+  // undefined = กำลังเช็ก, null = ยังไม่ login, string = login แล้ว
+  const [username, setUsername] = useState<string | null | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/health')
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json()
+    apiFetch<{ username: string }>('/auth/me')
+      .then((user) => setUsername(user.username))
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 401) setUsername(null)
+        else setError(err instanceof Error ? err.message : String(err))
       })
-      .then(setHealth)
-      .catch((err) => setError(String(err)))
   }, [])
 
+  async function handleLogout() {
+    await apiFetch('/auth/logout', { method: 'POST' })
+    setUsername(null)
+  }
+
+  if (error) return <p className="error page-message">ต่อ API ไม่ได้: {error}</p>
+  if (username === undefined) return <p className="muted page-message">กำลังโหลด...</p>
+  if (username === null) return <LoginPage onLogin={setUsername} />
+
   return (
-    <main style={{ fontFamily: 'sans-serif', padding: 32 }}>
-      <h1>VulnCompass</h1>
-      {error && <p style={{ color: 'crimson' }}>ต่อ API ไม่ได้: {error}</p>}
-      {!health && !error && <p>กำลังเช็กการเชื่อมต่อ...</p>}
-      {health && <p>API: {health.status} · Database: {health.database}</p>}
-    </main>
+    <div className="app">
+      <header className="topbar">
+        <span className="brand">VulnCompass</span>
+        <span className="muted">{username}</span>
+        <button className="secondary" onClick={handleLogout}>
+          ออกจากระบบ
+        </button>
+      </header>
+      <main className="content">
+        <h2>Dashboard</h2>
+        <p className="muted">หน้านี้จะแสดงสรุปช่องโหว่ใน C5.3</p>
+      </main>
+    </div>
   )
 }
 
