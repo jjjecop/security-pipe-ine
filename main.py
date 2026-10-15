@@ -243,6 +243,41 @@ def project_summary(project_name: str, session: Session = Depends(get_session)):
     }
 
 
+@app.get("/projects/{project_name}/scan-jobs", dependencies=[Depends(require_auth)])
+def list_scan_jobs(
+    project_name: str,
+    limit: int = Query(20, ge=1, le=100),
+    session: Session = Depends(get_session),
+):
+    project = get_project_or_404(session, project_name)
+    jobs = (
+        session.query(ScanJob)
+        .filter(ScanJob.project_id == project.id)
+        .order_by(ScanJob.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+    # ดึงครั้งเดียวว่างานไหนมี report แล้ว แทนการ query ทีละงาน (ปัญหา N+1 query)
+    job_ids = [job.id for job in jobs]
+    with_report = {
+        job_id
+        for (job_id,) in session.query(Report.scan_job_id).filter(Report.scan_job_id.in_(job_ids)).distinct()
+    }
+
+    return [
+        {
+            "id": job.id,
+            "status": job.status,
+            "triggered_by": job.triggered_by,
+            "requested_scans": job.requested_scans,
+            "created_at": job.created_at,
+            "has_report": job.id in with_report,
+        }
+        for job in jobs
+    ]
+
+
 @app.get("/scan-jobs/{job_id}", dependencies=[Depends(require_auth)])
 def get_scan_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(ScanJob, job_id)
