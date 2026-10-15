@@ -10,7 +10,7 @@ from fastapi.security import APIKeyHeader
 from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 
-from sqlalchemy import func, text
+from sqlalchemy import String, cast, func, or_, text
 from sqlalchemy.orm import Session
 
 from db import engine
@@ -93,6 +93,12 @@ def get_project_or_404(session, project_name: str) -> Project:
     return project
 
 
+def like_pattern(text: str) -> str:
+    # escape ตัวพิเศษของ LIKE ให้เป็นตัวอักษรธรรมดา ผู้ใช้จะได้ส่ง wildcard มาเองไม่ได้
+    escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 @app.get("/health")
 def health_check(session: Session = Depends(get_session)):
     try:
@@ -129,6 +135,7 @@ def list_findings(
     status: str = "open",
     severity: str | None = None,
     tool: str | None = None,
+    q: str | None = Query(None, max_length=100),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     session: Session = Depends(get_session),
@@ -144,6 +151,16 @@ def list_findings(
         query = query.filter(Finding.severity_normalized == severity)
     if tool:
         query = query.filter(Finding.tool == tool)
+    if q:
+        pattern = like_pattern(q)
+        query = query.filter(
+            or_(
+                Finding.title.ilike(pattern, escape="\\"),
+                Finding.tool_rule_id.ilike(pattern, escape="\\"),
+                Finding.cwe_id.ilike(pattern, escape="\\"),
+                cast(Finding.location, String).ilike(pattern, escape="\\"),
+            )
+        )
 
     total = query.count()
     findings = (
