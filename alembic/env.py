@@ -4,11 +4,16 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+from db import DATABASE_URL
 from models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# อ่าน URL (มีรหัสผ่าน) จาก .env ผ่าน db.py แทนการเขียนไว้ใน alembic.ini ที่ถูก commit
+# ต้องแทน % เป็น %% เพราะ ini ใช้ % เป็นอักขระพิเศษ
+config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
