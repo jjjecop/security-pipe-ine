@@ -244,6 +244,9 @@ select {
 
 .scan-progress { margin-top: 12px; }
 
+.report-links { display: flex; gap: 12px; white-space: nowrap; }
+.report-links a { color: #1d4ed8; }
+
 .scan-progress ul {
   display: flex;
   flex-direction: column;

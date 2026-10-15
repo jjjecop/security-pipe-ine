@@ -94,7 +94,18 @@ function ScansPage() {
                     <td>{job.requested_scans.join(', ')}</td>
                     <td>{job.triggered_by}</td>
                     <td>{formatDate(job.created_at)}</td>
-                    <td>{job.has_report ? 'มี' : '-'}</td>
+                     <td>
+                      {job.has_report ? (
+                        <span className="report-links">
+                          <a href={`/api/scan-jobs/${job.id}/report`}>ดาวน์โหลด</a>
+                          <a href={`/api/scan-jobs/${job.id}/report?inline=true`} target="_blank" rel="noopener noreferrer">
+                            เปิดดู/พิมพ์
+                          </a>
+                        </span>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
