@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from './api'
+import ToolChart from './ToolChart'
 import { SEVERITIES } from './types'
 import type { Project, Severity, Summary } from './types'
 
@@ -90,6 +91,7 @@ function Dashboard() {
               ? `สแกนล่าสุด #${summary.last_scan.id} (${summary.last_scan.status}) โดย ${summary.last_scan.triggered_by} เมื่อ ${formatDate(summary.last_scan.created_at)}`
               : 'ยังไม่เคยสแกน'}
           </p>
+          <ToolChart byTool={summary.by_tool} />
         </>
       )}
     </>

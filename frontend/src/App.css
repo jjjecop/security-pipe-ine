@@ -119,3 +119,12 @@ select {
 .severity-medium { border-left-color: #f59e0b; }
 .severity-low { border-left-color: #2563eb; }
 .severity-info { border-left-color: #9ca3af; }
+
+.panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.panel h3 { margin: 0 0 12px; font-size: 16px; }
