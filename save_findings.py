@@ -199,7 +199,8 @@ def create_scan_job(session: Session, project: Project, scans: list[str], trigge
     return scan_job
 
 
-def execute_scan_job(session: Session, scan_job: ScanJob, project: Project, repo_path=None, image=None, target_url=None) -> ScanJob:
+def execute_scan_job(session: Session, scan_job: ScanJob, project: Project, repo_path=None, image=None, target_url=None) -> str:
+    # คืนสถานะสุดท้ายแต่ยังไม่บันทึก งานยังเป็น running จนกว่าผู้เรียกจะทำขั้นอื่นเสร็จ (เช่นสร้างรายงาน)
     scan_job.status = "running"
     session.commit()
 
@@ -216,12 +217,7 @@ def execute_scan_job(session: Session, scan_job: ScanJob, project: Project, repo
         results.append(run_single_scan(session, scan_job, project, tool, collector))
 
     if all(results):
-        scan_job.status = "completed"
-    elif any(results):
-        scan_job.status = "partial"
-    else:
-        scan_job.status = "failed"
-    session.commit()
-
-    print(f"\nScanJob {scan_job.id} สถานะ: {scan_job.status}")
-    return scan_job
+        return "completed"
+    if any(results):
+        return "partial"
+    return "failed"

@@ -362,7 +362,7 @@ def create_scan(
         "status_url": f"/scan-jobs/{scan_job.id}",
     }
 
-def report_file_response(report: Report, project_name: str) -> FileResponse:
+def report_file_response(report: Report, project_name: str, inline: bool = False) -> FileResponse:
     path = report.file_path or ""
     if not os.path.isabs(path):
         path = os.path.join(BASE_DIR, path)
@@ -370,11 +370,13 @@ def report_file_response(report: Report, project_name: str) -> FileResponse:
     if not is_repo_allowed(path, [REPORTS_DIR]) or not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="ไม่พบไฟล์รายงาน")
     filename = f"{project_name}_scanjob{report.scan_job_id}_security_report.pdf"
-    return FileResponse(path, media_type="application/pdf", filename=filename)
+    # inline = เปิดดูในแท็บใหม่ (กดพิมพ์จากตัวดู PDF ได้) / attachment = ดาวน์โหลดเป็นไฟล์
+    disposition = "inline" if inline else "attachment"
+    return FileResponse(path, media_type="application/pdf", filename=filename, content_disposition_type=disposition)
 
 
 @app.get("/scan-jobs/{job_id}/report", dependencies=[Depends(require_auth)])
-def download_scan_job_report(job_id: int, session: Session = Depends(get_session)):
+def download_scan_job_report(job_id: int, inline: bool = False, session: Session = Depends(get_session)):
     job = session.get(ScanJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"ไม่พบ ScanJob {job_id}")
@@ -389,11 +391,11 @@ def download_scan_job_report(job_id: int, session: Session = Depends(get_session
         raise HTTPException(status_code=404, detail="ScanJob นี้ยังไม่มีรายงาน (ยังสแกนไม่เสร็จ หรือสั่งแบบไม่สร้างรายงาน)")
 
     project = session.get(Project, job.project_id)
-    return report_file_response(report, project.name)
+    return report_file_response(report, project.name, inline)
 
 
 @app.get("/projects/{project_name}/report", dependencies=[Depends(require_auth)])
-def download_latest_project_report(project_name: str, session: Session = Depends(get_session)):
+def download_latest_project_report(project_name: str, inline: bool = False, session: Session = Depends(get_session)):
     project = get_project_or_404(session, project_name)
 
     report = (
@@ -406,7 +408,7 @@ def download_latest_project_report(project_name: str, session: Session = Depends
     if report is None:
         raise HTTPException(status_code=404, detail="โปรเจกต์นี้ยังไม่มีรายงาน")
 
-    return report_file_response(report, project.name)
+    return report_file_response(report, project.name, inline)
 
 
 # ใช้ตอนไม่พบ user ให้ใช้เวลาตรวจเท่ากับ user ที่มีอยู่จริง
