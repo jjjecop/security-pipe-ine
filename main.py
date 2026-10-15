@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from save_findings import create_scan_job, get_or_create_project
 from scan_policy import is_repo_allowed, is_url_allowed, resolve_scans, split_setting
 from scan_queue import enqueue_scan
+from security_gate import SEVERITY_ORDER
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -195,7 +196,6 @@ def list_findings(
     }
 
 
-SEVERITY_ORDER = ("critical", "high", "medium", "low", "info")
 
 
 @app.get("/projects/{project_name}/summary", dependencies=[Depends(require_auth)])

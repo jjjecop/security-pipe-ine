@@ -12,6 +12,7 @@ from db import engine
 from save_findings import SCAN_TYPES, get_or_create_project, create_scan_job
 from pipeline import run_full_pipeline
 from scan_queue import enqueue_scan
+from security_gate import SEVERITY_ORDER, count_blocking_findings, gate_message
 
 
 def parse_args():
@@ -36,9 +37,17 @@ def parse_args():
     parser.add_argument("--with-remediation", action="store_true", help="ให้ Gemini เขียนคำแนะนำการแก้ไขให้ CWE ที่ยังไม่มี (ประมาณ 13-40 วินาทีต่อ CWE)")
     parser.add_argument("--no-epss", action="store_true", help="ไม่ดึงคะแนน EPSS จาก FIRST.org (ใช้ตอนไม่มี internet)")
     parser.add_argument("--queue", action="store_true", help="ใส่งานเข้าคิวให้ worker.py สแกนแทน แล้วจบทันที")
+    parser.add_argument(
+        "--fail-on",
+        choices=SEVERITY_ORDER,
+        help="จบด้วย exit code 1 ถ้ายังมีช่องโหว่ระดับนี้ขึ้นไปเปิดอยู่ (ใช้เป็น security gate ใน CI)",
+    )
 
     args = parser.parse_args()
 
+    if args.fail_on and args.queue:
+        parser.error("--fail-on ใช้กับ --queue ไม่ได้ เพราะตอนจบคำสั่งยังไม่รู้ผลสแกน")
+        
     if args.scans:
         scans = [s.strip() for s in args.scans.split(",") if s.strip()]
         unknown = [s for s in scans if s not in SCAN_TYPES]
@@ -102,9 +111,14 @@ def main():
         )
 
         failed = scan_job.status == "failed"
+        blocking = count_blocking_findings(session, project.id, args.fail_on) if args.fail_on else {}
 
     if failed:
         raise SystemExit(1)
+    if args.fail_on:
+        print(f"\n{gate_message(args.fail_on, blocking)}")
+        if blocking:
+            raise SystemExit(1)
 
 
 if __name__ == "__main__":
