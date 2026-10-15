@@ -1,16 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { apiFetch } from './api'
 import { errorMessage, formatDate } from './format'
+import ScanForm from './ScanForm'
+import { STATUS_LABELS } from './types'
 import type { Project, ScanJobSummary } from './types'
-
-// มีทั้งไอคอนและคำ ไม่ใช้สีอย่างเดียวในการบอกสถานะ
-const STATUS_LABELS: Record<string, string> = {
-  queued: '⏳ รอคิว',
-  running: '⟳ กำลังสแกน',
-  completed: '✓ เสร็จ',
-  partial: '⚠ เสร็จบางส่วน',
-  failed: '✕ ล้มเหลว',
-}
 
 function ScansPage() {
   const [projects, setProjects] = useState<Project[] | null>(null)
@@ -18,6 +11,8 @@ function ScansPage() {
   const [jobs, setJobs] = useState<{ project: string; items: ScanJobSummary[] } | null>(null)
   const [refreshCount, setRefreshCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  // useCallback ให้ได้ฟังก์ชันตัวเดิมทุกครั้งที่ render ไม่อย่างนั้น polling ใน ScanForm จะเริ่มใหม่ทุกรอบ
+  const refresh = useCallback(() => setRefreshCount((count) => count + 1), [])
 
   useEffect(() => {
     apiFetch<Project[]>('/projects')
@@ -47,6 +42,8 @@ function ScansPage() {
   if (projects === null) return <p className="muted">กำลังโหลดโปรเจกต์...</p>
   if (projects.length === 0) return <p className="muted">ยังไม่มีโปรเจกต์</p>
 
+  const project = projects.find((p) => p.name === selected)
+
   return (
     <>
       <div className="toolbar">
@@ -61,10 +58,12 @@ function ScansPage() {
             ))}
           </select>
         </label>
-        <button className="secondary" onClick={() => setRefreshCount(refreshCount + 1)}>
+        <button className="secondary" onClick={refresh}>
           รีเฟรช
         </button>
       </div>
+
+      {project && <ScanForm key={project.name} project={project} onFinished={refresh} />}
 
       <section className="panel">
         <h3>ประวัติการสแกน</h3>

@@ -76,3 +76,31 @@ export type ScanJobSummary = {
   created_at: string | null
   has_report: boolean
 }
+
+// มีทั้งไอคอนและคำ ไม่ใช้สีอย่างเดียวในการบอกสถานะ
+export const STATUS_LABELS: Record<string, string> = {
+  queued: '⏳ รอคิว',
+  running: '⟳ กำลังสแกน',
+  completed: '✓ เสร็จ',
+  partial: '⚠ เสร็จบางส่วน',
+  failed: '✕ ล้มเหลว',
+}
+
+export const SCAN_TYPES = ['sast', 'dependency', 'container', 'dast'] as const
+export type ScanType = (typeof SCAN_TYPES)[number]
+
+export type ScanRun = {
+  tool: string
+  status: string
+  started_at: string | null
+  finished_at: string | null
+  error_message: string | null
+}
+
+export type ScanJobDetail = {
+  id: number
+  status: string
+  requested_scans: string[]
+  created_at: string | null
+  runs: ScanRun[]
+}
