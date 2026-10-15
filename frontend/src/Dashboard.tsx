@@ -1,16 +1,9 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from './api'
+import FindingsTable from './FindingsTable'
 import ToolChart from './ToolChart'
-import { SEVERITIES } from './types'
-import type { Project, Severity, Summary } from './types'
-
-const SEVERITY_LABELS: Record<Severity, string> = {
-  critical: 'วิกฤต',
-  high: 'สูง',
-  medium: 'ปานกลาง',
-  low: 'ต่ำ',
-  info: 'ข้อมูล',
-}
+import { SEVERITIES, SEVERITY_LABELS } from './types'
+import type { Project, Summary } from './types'
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -92,6 +85,7 @@ function Dashboard() {
               : 'ยังไม่เคยสแกน'}
           </p>
           <ToolChart byTool={summary.by_tool} />
+          <FindingsTable key={summary.project} project={summary.project} tools={Object.keys(summary.by_tool)} />
         </>
       )}
     </>
