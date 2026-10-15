@@ -169,13 +169,16 @@ select {
 }
 
 .location { font-size: 12px; word-break: break-all; }
+.findings td:nth-child(5),
+.findings td:nth-child(6) { white-space: nowrap; }
 
 .badge {
   display: inline-block;
   padding: 2px 8px;
-  border-left: 4px solid #9ca3af;
-  border-radius: 4px;
+  border-left-width: 4px;
+  border-left-style: solid;
   background: #f3f4f6;
+  border-radius: 4px;
   font-size: 12px;
   white-space: nowrap;
 }
