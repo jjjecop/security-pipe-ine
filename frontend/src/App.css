@@ -206,3 +206,9 @@ select {
 .pager .muted { margin-right: auto; }
 .pager button { padding: 6px 12px; }
 .pager button:disabled { cursor: not-allowed; }
+
+.status-completed { border-left-color: #16a34a; }
+.status-partial { border-left-color: #d97706; }
+.status-failed { border-left-color: #dc2626; }
+.status-running { border-left-color: #2563eb; }
+.status-queued { border-left-color: #9ca3af; }

@@ -67,3 +67,12 @@ export type FindingPage = {
   offset: number
   items: Finding[]
 }
+
+export type ScanJobSummary = {
+  id: number
+  status: string
+  triggered_by: string
+  requested_scans: string[]
+  created_at: string | null
+  has_report: boolean
+}

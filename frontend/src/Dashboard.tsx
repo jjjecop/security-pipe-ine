@@ -1,19 +1,11 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from './api'
 import FindingsTable from './FindingsTable'
+import { errorMessage, formatDate } from './format'
 import ToolChart from './ToolChart'
 import { SEVERITIES, SEVERITY_LABELS } from './types'
 import type { Project, Summary } from './types'
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
-
-function formatDate(value: string | null): string {
-  if (value === null) return '-'
-  // API เก็บเวลาเป็น UTC แต่ไม่มี Z ต่อท้าย ต้องเติมเองก่อนแปลงเป็นเวลาไทย
-  return new Date(value + 'Z').toLocaleString('th-TH')
-}
 
 function Dashboard() {
   const [projects, setProjects] = useState<Project[] | null>(null)
