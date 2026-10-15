@@ -1,0 +1,75 @@
+name: Security self-scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  self-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # ฐานข้อมูลชั่วคราว มีอยู่แค่ระหว่างรัน job นี้ รหัสด้านล่างจึงไม่ใช่ความลับ
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-only-throwaway
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_USER: ci
+      POSTGRES_PASSWORD: ci-only-throwaway
+      POSTGRES_DB: ci
+      FAIL_ON: critical
+
+    steps:
+      # ล็อก action ด้วย commit SHA แทน tag เพราะ tag ถูกย้ายไปชี้โค้ดอื่นได้
+      - name: Get the code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install PDF libraries and Thai fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 fonts-thai-tlwg
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Trivy
+        run: sudo bash scripts/install_trivy.sh
+
+      - name: Scan VulnCompass with VulnCompass
+        run: bash scripts/ci_self_scan.sh
+
+      # แนบรายงานไว้ดาวน์โหลดได้ แม้ gate จะไม่ผ่าน
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vulncompass-self-scan-report
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
