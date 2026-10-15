@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { NavLink, Route, Routes } from 'react-router'
 import { ApiError, apiFetch } from './api'
-import LoginPage from './LoginPage'
 import Dashboard from './Dashboard'
+import LoginPage from './LoginPage'
+import ScansPage from './ScansPage'
 import './App.css'
 
 function App() {
@@ -31,14 +33,23 @@ function App() {
     <div className="app">
       <header className="topbar">
         <span className="brand">VulnCompass</span>
+        <nav className="nav">
+          <NavLink to="/" end>
+            Dashboard
+          </NavLink>
+          <NavLink to="/scans">การสแกน</NavLink>
+        </nav>
         <span className="muted">{username}</span>
         <button className="secondary" onClick={handleLogout}>
           ออกจากระบบ
         </button>
       </header>
       <main className="content">
-         <Dashboard />
-        
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/scans" element={<ScansPage />} />
+          <Route path="*" element={<p className="muted">ไม่พบหน้านี้</p>} />
+        </Routes>
       </main>
     </div>
   )
