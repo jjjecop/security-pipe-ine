@@ -1,3 +1,4 @@
+import logging
 import os
 import secrets
 from datetime import datetime
@@ -7,10 +8,11 @@ import redis
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.security import APIKeyHeader
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from sqlalchemy import String, cast, func, or_, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from db import engine
@@ -43,6 +45,16 @@ app.add_middleware(
     same_site="strict",
     https_only=os.getenv("SESSION_HTTPS_ONLY", "false").lower() == "true",
 )
+
+logger = logging.getLogger("uvicorn.error")
+
+
+@app.exception_handler(OperationalError)
+def database_unavailable(request: Request, exc: OperationalError):
+    # ฐานข้อมูลปิดหรือต่อไม่ได้ ไม่ใช่บั๊กในโค้ด จึงตอบ 503 (ลองใหม่ได้) แทน 500
+    # รายละเอียด error มี host และ port ของฐานข้อมูล บันทึกไว้ฝั่ง server เท่านั้น ไม่ส่งให้ผู้ใช้
+    logger.error("ต่อฐานข้อมูลไม่ได้ (%s %s): %s", request.method, request.url.path, exc.orig)
+    return JSONResponse(status_code=503, content={"detail": "ฐานข้อมูลไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง"})
 
 
 def get_session():
