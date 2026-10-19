@@ -15,7 +15,9 @@ def get_redis():
     # socket_timeout ต้องนานกว่า timeout ของ BLPOP ไม่อย่างนั้น Python จะตัดการเชื่อมต่อ
     # ก่อนที่ Redis จะตอบว่าคิวว่าง (redis-py 8 ตั้งค่าเริ่มต้นไว้ 5 วินาที เท่ากับ BLPOP ของเรา)
     return redis.Redis.from_url(
-        os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+        # ใช้ 127.0.0.1 ไม่ใช่ localhost: บน Windows localhost จะลอง IPv6 (::1) ก่อน
+        # แต่ Docker เปิด port ไว้แค่ IPv4 จึงเสียเวลารอประมาณ 2 วินาทีทุกครั้งที่ต่อใหม่
+        os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0"),
         # แยกรหัสผ่านออกจาก URL จะได้ไม่ต้อง encode อักขระพิเศษ และ URL ไม่มีความลับติดอยู่ตอนพิมพ์ log
         password=os.getenv("REDIS_PASSWORD") or None,
         decode_responses=True,
