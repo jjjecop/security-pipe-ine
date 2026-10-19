@@ -2,23 +2,23 @@ import os
 
 import pytest
 
-from scan_policy import is_repo_allowed, is_url_allowed, resolve_scans, split_setting
+from scan_policy import is_path_inside, is_url_allowed, resolve_scans, split_setting
 
 
 def test_repo_inside_allowed_root_is_allowed(tmp_path):
     repo = tmp_path / "NodeGoat"
     repo.mkdir()
-    assert is_repo_allowed(str(repo), [str(tmp_path)])
+    assert is_path_inside(str(repo), [str(tmp_path)])
 
 
 def test_repo_outside_allowed_root_is_refused(tmp_path):
     outside = os.path.dirname(str(tmp_path))
-    assert not is_repo_allowed(outside, [str(tmp_path)])
+    assert not is_path_inside(outside, [str(tmp_path)])
 
 
 def test_dot_dot_cannot_escape_allowed_root(tmp_path):
     escape = os.path.join(str(tmp_path), "NodeGoat", "..", "..")
-    assert not is_repo_allowed(escape, [str(tmp_path)])
+    assert not is_path_inside(escape, [str(tmp_path)])
 
 
 def test_sibling_folder_with_same_prefix_is_refused(tmp_path):
@@ -26,11 +26,11 @@ def test_sibling_folder_with_same_prefix_is_refused(tmp_path):
     evil = tmp_path / "TargetsEvil"
     allowed.mkdir()
     evil.mkdir()
-    assert not is_repo_allowed(str(evil), [str(allowed)])
+    assert not is_path_inside(str(evil), [str(allowed)])
 
 
 def test_nothing_allowed_when_not_configured(tmp_path):
-    assert not is_repo_allowed(str(tmp_path), [])
+    assert not is_path_inside(str(tmp_path), [])
     assert not is_url_allowed("http://localhost:4000", [])
 
 

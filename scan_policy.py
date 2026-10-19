@@ -8,10 +8,11 @@ def split_setting(value: str | None, separator: str) -> list[str]:
     return [item.strip() for item in (value or "").split(separator) if item.strip()]
 
 
-def is_repo_allowed(repo_path: str, allowed_roots: list[str]) -> bool:
+def is_path_inside(path: str, allowed_roots: list[str]) -> bool:
+    # ใช้ตรวจทั้งโฟลเดอร์ที่สั่งสแกน และไฟล์รายงานก่อนส่งให้ดาวน์โหลด
     # realpath แปลง .. และ shortcut ให้เป็น path จริงก่อนเทียบ
     # กันการหลบออกนอกโฟลเดอร์ เช่น C:\Allprojects\Targets\..\..\Users
-    real = os.path.normcase(os.path.realpath(repo_path))
+    real = os.path.normcase(os.path.realpath(path))
     for root in allowed_roots:
         real_root = os.path.normcase(os.path.realpath(root))
         try:

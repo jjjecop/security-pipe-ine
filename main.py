@@ -19,7 +19,7 @@ from models import Finding, Project, Report, ScanJob, ScanRun, User, utc_now
 from auth import LoginRateLimiter, hash_password, verify_password
 from pydantic import BaseModel, Field
 from save_findings import create_scan_job, get_or_create_project
-from scan_policy import is_repo_allowed, is_url_allowed, resolve_scans, split_setting
+from scan_policy import is_path_inside, is_url_allowed, resolve_scans, split_setting
 from scan_queue import enqueue_scan
 from security_gate import SEVERITY_ORDER
 
@@ -339,7 +339,7 @@ def create_scan(
     repo_path = None
     if request.repo_path:
         allowed_roots = split_setting(os.getenv("SCAN_ALLOWED_REPO_ROOTS"), ";")
-        if not is_repo_allowed(request.repo_path, allowed_roots):
+        if not is_path_inside(request.repo_path, allowed_roots):
             raise HTTPException(status_code=400, detail="repo_path ไม่อยู่ในโฟลเดอร์ที่อนุญาต (SCAN_ALLOWED_REPO_ROOTS)")
         if not os.path.isdir(request.repo_path):
             raise HTTPException(status_code=400, detail="ไม่พบโฟลเดอร์ repo_path")
@@ -379,7 +379,7 @@ def report_file_response(report: Report, project_name: str, inline: bool = False
     if not os.path.isabs(path):
         path = os.path.join(BASE_DIR, path)
     # file_path มาจากฐานข้อมูล ตรวจซ้ำว่าอยู่ใต้ reports/ จริง ไม่อย่างนั้นอาจส่งไฟล์อย่าง .env ออกไปได้
-    if not is_repo_allowed(path, [REPORTS_DIR]) or not os.path.isfile(path):
+    if not is_path_inside(path, [REPORTS_DIR]) or not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="ไม่พบไฟล์รายงาน")
     filename = f"{project_name}_scanjob{report.scan_job_id}_security_report.pdf"
     # inline = เปิดดูในแท็บใหม่ (กดพิมพ์จากตัวดู PDF ได้) / attachment = ดาวน์โหลดเป็นไฟล์
