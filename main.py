@@ -1,7 +1,6 @@
 import logging
 import os
 import secrets
-from datetime import datetime
 from typing import Literal
 
 import redis
@@ -16,7 +15,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from db import engine
-from models import Finding, Project, Report, ScanJob, ScanRun, User
+from models import Finding, Project, Report, ScanJob, ScanRun, User, utc_now
 from auth import LoginRateLimiter, hash_password, verify_password
 from pydantic import BaseModel, Field
 from save_findings import create_scan_job, get_or_create_project
@@ -450,7 +449,7 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_sessio
         raise HTTPException(status_code=401, detail="username หรือรหัสผ่านไม่ถูกต้อง")
 
     login_limiter.reset(limit_key)
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = utc_now()
     db.commit()
 
     request.session.clear()

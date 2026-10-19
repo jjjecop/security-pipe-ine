@@ -1,8 +1,6 @@
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
-from models import Project, ScanJob, ScanRun, Finding
+from models import Project, ScanJob, ScanRun, Finding, utc_now
 from normalizer import (
     normalize_semgrep_finding,
     normalize_trivy_finding,
@@ -31,7 +29,7 @@ def save_finding_with_dedup(session, scan_run_id, project_id, normalized):
     )
 
     if existing:
-        existing.last_seen = datetime.utcnow()
+        existing.last_seen = utc_now()
         existing.status = "open"
         existing.location = normalized["location"]
         existing.severity_native = normalized["severity_native"]
@@ -138,7 +136,7 @@ def run_single_scan(session, scan_job, project, tool, collector) -> bool:
         scan_job_id=scan_job.id,
         tool=tool,
         status="running",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
     session.add(scan_run)
     session.commit()
@@ -169,7 +167,7 @@ def run_single_scan(session, scan_job, project, tool, collector) -> bool:
         fixed_count = mark_missing_as_fixed(session, project.id, tool, seen_fingerprints)
 
         scan_run.status = "completed"
-        scan_run.finished_at = datetime.utcnow()
+        scan_run.finished_at = utc_now()
         session.commit()
         print(f"[{tool}] เพิ่มใหม่ {inserted_count} | อัปเดต {updated_count} | แก้ไขแล้ว {fixed_count}")
         return True
@@ -177,7 +175,7 @@ def run_single_scan(session, scan_job, project, tool, collector) -> bool:
     except Exception as e:
         session.rollback()
         scan_run.status = "failed"
-        scan_run.finished_at = datetime.utcnow()
+        scan_run.finished_at = utc_now()
         scan_run.error_message = str(e)[:4000]
         session.commit()
         print(f"[{tool}] ล้มเหลว: {e}")
@@ -190,7 +188,7 @@ def create_scan_job(session: Session, project: Project, scans: list[str], trigge
         requested_scans=scans,
         status="queued",
         triggered_by=triggered_by,
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
     )
     session.add(scan_job)
     session.commit()

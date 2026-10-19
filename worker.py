@@ -2,14 +2,13 @@ import sys
 import time
 import traceback
 
-from datetime import datetime
 
 import redis
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from db import engine
-from models import Project, ScanJob, ScanRun
+from models import Project, ScanJob, ScanRun, utc_now
 from pipeline import run_full_pipeline
 from scan_queue import wait_for_scan, enqueue_scan, finish_scan, list_unfinished_scans
 
@@ -49,7 +48,7 @@ def fail_interrupted_job(session, scan_job):
     session.execute(
         update(ScanRun)
         .where(ScanRun.scan_job_id == scan_job.id, ScanRun.status == "running")
-        .values(status="failed", finished_at=datetime.utcnow(), error_message="worker หยุดทำงานระหว่างสแกน")
+        .values(status="failed", finished_at=utc_now(), error_message="worker หยุดทำงานระหว่างสแกน")
     )
     session.commit()
 

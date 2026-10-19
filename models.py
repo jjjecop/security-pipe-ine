@@ -1,7 +1,13 @@
 from sqlalchemy import String, ForeignKey, Text, Float, JSON, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime
+from datetime import UTC, datetime
 from sqlalchemy.dialects.postgresql import ARRAY
+
+
+def utc_now() -> datetime:
+    # เวลา UTC แบบไม่มี timezone เหมือน datetime.utcnow() เดิม (ที่ Python เลิกใช้แล้ว)
+    # คอลัมน์ในฐานข้อมูลเก็บแบบไม่มี timezone และหน้าเว็บถือว่าเป็น UTC จึงต้องคงรูปแบบเดิมไว้
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):
@@ -14,7 +20,7 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(255))
     repo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     target_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
 
 class ScanJob(Base):
     __tablename__ = "scanjob"
@@ -64,8 +70,8 @@ class Finding(Base):
     location: Mapped[dict] = mapped_column(JSON)
     remediation: Mapped[str | None] = mapped_column(Text, nullable=True) 
     status: Mapped[str] = mapped_column(String(20), default="open")
-    first_seen: Mapped[datetime] = mapped_column(default=datetime.utcnow)
-    last_seen: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    first_seen: Mapped[datetime] = mapped_column(default=utc_now)
+    last_seen: Mapped[datetime] = mapped_column(default=utc_now)
     
 
 class Report(Base):
@@ -75,7 +81,7 @@ class Report(Base):
     scan_job_id: Mapped[int] = mapped_column(ForeignKey("scanjob.id"))
     file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    generated_at:   Mapped[datetime] = mapped_column(default=datetime.utcnow) 
+    generated_at:   Mapped[datetime] = mapped_column(default=utc_now) 
 
 
 class User(Base):
@@ -85,7 +91,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(50), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
     last_login_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
 
