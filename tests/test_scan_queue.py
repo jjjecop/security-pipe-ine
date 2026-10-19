@@ -1,4 +1,4 @@
-from scan_queue import QUEUE_NAME, enqueue_scan, finish_scan, list_unfinished_scans, wait_for_scan
+from scan_queue import QUEUE_NAME, enqueue_scan, finish_scan, get_redis, list_unfinished_scans, wait_for_scan
 from tests.fake_redis import FakeRedis
 
 
@@ -35,3 +35,13 @@ def test_taken_scan_stays_in_processing_until_finished():
 
     finish_scan(task, client=fake)
     assert list_unfinished_scans(client=fake) == []
+
+def test_redis_password_comes_from_env(monkeypatch):
+    monkeypatch.setenv("REDIS_PASSWORD", "from-env")
+    assert get_redis().connection_pool.connection_kwargs["password"] == "from-env"
+
+
+def test_empty_redis_password_is_not_sent(monkeypatch):
+    # ส่งรหัสว่างไป Redis จะตอบ error ทั้งที่ Redis ไม่ได้ตั้งรหัสไว้ จึงต้องไม่ส่งเลย
+    monkeypatch.setenv("REDIS_PASSWORD", "")
+    assert get_redis().connection_pool.connection_kwargs.get("password") is None

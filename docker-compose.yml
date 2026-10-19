@@ -40,6 +40,11 @@ services:
   redis:
     image: redis:7-alpine
     container_name: secpipeline-redis
+    environment:
+      # ถ้าไม่ได้ตั้งใน .env จะไม่ยอมเปิด แทนที่จะเปิดแบบไม่มีรหัสผ่าน
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+    # $$ ให้ shell ใน container อ่านค่าเอง รหัสผ่านจึงไม่ถูกเขียนลงในคำสั่งของ compose
+    command: sh -c 'exec redis-server --requirepass "$$REDIS_PASSWORD"'
     ports:
       - "127.0.0.1:6379:6379"
 

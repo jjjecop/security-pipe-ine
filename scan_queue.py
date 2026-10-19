@@ -16,6 +16,8 @@ def get_redis():
     # ก่อนที่ Redis จะตอบว่าคิวว่าง (redis-py 8 ตั้งค่าเริ่มต้นไว้ 5 วินาที เท่ากับ BLPOP ของเรา)
     return redis.Redis.from_url(
         os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+        # แยกรหัสผ่านออกจาก URL จะได้ไม่ต้อง encode อักขระพิเศษ และ URL ไม่มีความลับติดอยู่ตอนพิมพ์ log
+        password=os.getenv("REDIS_PASSWORD") or None,
         decode_responses=True,
         socket_timeout=30,
     )
