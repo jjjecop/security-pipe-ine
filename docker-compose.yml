@@ -1,3 +1,22 @@
+# ค่าที่ API และ worker ใช้ร่วมกัน (x- คือส่วนที่ Docker ไม่ถือว่าเป็น service แค่เอาไว้อ้างถึง)
+x-backend: &backend
+  build: .
+  image: vulncompass-backend
+  profiles: ["app"]
+  env_file: .env
+  environment:
+    # ใน Docker เรียกกันด้วยชื่อ service แทน localhost
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    # คนละ DB กับตอนรันในเครื่อง (DB 0) worker ใน Docker จะได้ไม่หยิบงานที่มี path แบบ Windows มาทำ
+    REDIS_URL: redis://redis:6379/1
+    # .env ชี้ไปที่ไฟล์ CA บน Windows ซึ่งไม่มีใน container จึงใช้ของระบบ Linux แทน
+    REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+    SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+    SCAN_ALLOWED_REPO_ROOTS: /targets
+    # container ใช้เวลา UTC เป็นค่าเริ่มต้น ตั้งให้วันที่ในรายงานตรงกับเวลาไทย
+    TZ: ${TZ:-Asia/Bangkok}
+
 services:
   postgres:  # Automated Security Assessment & Reporting Pipeline ครับเป็นระบบที่ ระบบที่รับ source cod
     image: postgres:16-alpine #ไปดึงโปรแกรมสำเร็จรูปนี้มาใช้" แทนที่เราจะต้องเขียน Postgres เอง
@@ -7,18 +26,69 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports: 
+    ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - pg_data:/var/lib/postgresql/data  
+      - pg_data:/var/lib/postgresql/data
+    # ให้ service อื่นรอจนฐานข้อมูลพร้อมรับคำสั่งจริง ไม่ใช่แค่ container เปิดแล้ว
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   redis:
     image: redis:7-alpine
     container_name: secpipeline-redis
     ports:
       - "127.0.0.1:6379:6379"
-volumes: 
+
+  # ---- ตั้งแต่ตรงนี้เปิดเฉพาะตอนสั่ง docker compose --profile app up ----
+
+  # สร้างตารางหรือรัน migration แล้วจบ API และ worker จะเริ่มหลังขั้นนี้สำเร็จเท่านั้น
+  migrate:
+    <<: *backend
+    command: sh -c "python init_db.py && python seed_cwe_mapping.py"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *backend
+    volumes:
+      - ./reports:/app/reports
+      # API ตรวจว่าโฟลเดอร์ที่สั่งสแกนมีอยู่จริงก่อนใส่คิว จึงต้องเห็นโฟลเดอร์เดียวกับ worker
+      - ${TARGETS_DIR:-../Targets}:/targets:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+  worker:
+    <<: *backend
+    command: python worker.py
+    volumes:
+      - ./reports:/app/reports
+      # โฟลเดอร์โค้ดที่จะสแกน เปิดแบบอ่านอย่างเดียว worker แก้ไฟล์ของจริงไม่ได้
+      - ${TARGETS_DIR:-../Targets}:/targets:ro
+      # เก็บฐานข้อมูลช่องโหว่ของ Trivy ไว้ ไม่ต้องโหลดใหม่ทุกครั้งที่เปิด container
+      - trivy_cache:/home/app/.cache/trivy
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+  web:
+    build: ./frontend
+    image: vulncompass-web
+    profiles: ["app"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - api
+
+volumes:
   pg_data:
-   
-
-
+  trivy_cache:

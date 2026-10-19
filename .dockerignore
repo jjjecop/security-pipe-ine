@@ -1,0 +1,15 @@
+# ไม่ส่งไฟล์เหล่านี้เข้าไปตอน build: บางไฟล์เป็นความลับ บางไฟล์ใหญ่และไม่จำเป็น
+.env
+ca-bundle.pem
+.git
+venv
+__pycache__
+*.pyc
+frontend
+reports
+backups
+docs
+tests
+CheatSheetSeries
+zap_results.json
+security_report.pdf
