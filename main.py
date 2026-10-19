@@ -375,7 +375,8 @@ def create_scan(
     }
 
 def report_file_response(report: Report, project_name: str, inline: bool = False) -> FileResponse:
-    path = report.file_path or ""
+    # รายงานที่สร้างบน Windows เก็บ path เป็น reports\... แปลงเป็น / ซึ่งใช้ได้ทั้ง Windows และ Linux (Docker)
+    path = (report.file_path or "").replace("\\", "/")
     if not os.path.isabs(path):
         path = os.path.join(BASE_DIR, path)
     # file_path มาจากฐานข้อมูล ตรวจซ้ำว่าอยู่ใต้ reports/ จริง ไม่อย่างนั้นอาจส่งไฟล์อย่าง .env ออกไปได้
