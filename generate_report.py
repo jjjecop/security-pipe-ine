@@ -6,13 +6,15 @@ from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader
 
 TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 
-env = Environment(
+# ชื่อช่องโหว่และ path มาจากโค้ดที่ถูกสแกน ซึ่งคนนอกเป็นคนเขียน จึงต้อง escape ทุกค่าเสมอ ไม่ขึ้นกับนามสกุลไฟล์
+# Semgrep เตือนเพราะกฎนี้เขียนไว้สำหรับ Flask เราไม่ได้ใช้ Flask และเปิด autoescape แล้ว (มี test ใน test_report_escaping.py)
+env = Environment(  # nosemgrep: python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
     loader=FileSystemLoader(TEMPLATES_DIR),
-    autoescape=select_autoescape(["html"]),
+    autoescape=True,
 )
 
 from models import Finding, Project, CweOwaspMapping, Report

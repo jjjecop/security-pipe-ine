@@ -31,7 +31,10 @@ def fetch_epss_scores(cve_ids, timeout: int = 30) -> dict[str, float]:
     for i in range(0, len(cve_ids), BATCH_SIZE):
         batch = cve_ids[i:i + BATCH_SIZE]
         query = urllib.parse.urlencode({"cve": ",".join(batch), "limit": len(batch)})
-        with urllib.request.urlopen(f"{EPSS_API_URL}?{query}", timeout=timeout) as response:
+        # URL ขึ้นต้นด้วย EPSS_API_URL (https) ที่เขียนตายตัวไว้ ส่วนรหัส CVE ผ่าน urlencode ไปอยู่ใน query เท่านั้น
+        # ผู้ใช้จึงเปลี่ยนเป็น file:// หรือ host อื่นไม่ได้
+        url = f"{EPSS_API_URL}?{query}"
+        with urllib.request.urlopen(url, timeout=timeout) as response:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             scores.update(parse_epss_response(json.load(response)))
     return scores
 
