@@ -2,6 +2,17 @@ class FakeRedis:
     # จำลองคำสั่ง list ของ Redis ที่คิวใช้ เก็บไว้ใน dict ธรรมดา ไม่ต้องเปิด Redis จริง
     def __init__(self):
         self.lists = {}
+        self.values = {}
+        self.expires_at = {}
+        self.now = 0.0
+
+    def advance(self, seconds):
+        # เลื่อนเวลาของ Redis ปลอม แทนการรอจริง
+        self.now += seconds
+        for name, when in list(self.expires_at.items()):
+            if when <= self.now:
+                self.values.pop(name, None)
+                del self.expires_at[name]
 
     def rpush(self, name, value):
         self.lists.setdefault(name, []).append(value)
@@ -23,3 +34,20 @@ class FakeRedis:
 
     def lrange(self, name, start, end):
         return list(self.lists.get(name, []))
+
+    def get(self, name):
+        return self.values.get(name)
+
+    def incr(self, name):
+        self.values[name] = str(int(self.values.get(name, 0)) + 1)
+        return int(self.values[name])
+
+    def expire(self, name, seconds, nx=False):
+        if name not in self.values or (nx and name in self.expires_at):
+            return False
+        self.expires_at[name] = self.now + seconds
+        return True
+
+    def delete(self, name):
+        self.expires_at.pop(name, None)
+        return 1 if self.values.pop(name, None) is not None else 0

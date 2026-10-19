@@ -438,7 +438,12 @@ class LoginRequest(BaseModel):
 def login(body: LoginRequest, request: Request, db: Session = Depends(get_session)):
     client_ip = request.client.host if request.client else "unknown"
     limit_key = f"{client_ip}:{body.username.lower()}"
-    if login_limiter.is_blocked(limit_key):
+    try:
+        blocked = login_limiter.is_blocked(limit_key)
+    except redis.exceptions.RedisError:
+        # ตรวจจำนวนครั้งที่ผิดไม่ได้ ถ้ายอมให้ login ต่อ ผู้โจมตีจะเดารหัสได้ไม่จำกัด จึงปฏิเสธไว้ก่อน (fail closed)
+        raise HTTPException(status_code=503, detail="ระบบ login ไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง")
+    if blocked:
         raise HTTPException(status_code=429, detail="login ผิดหลายครั้งเกินไป กรุณารอ 15 นาที")
 
     user = db.query(User).filter(User.username == body.username).first()

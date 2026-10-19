@@ -2,7 +2,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
 
+import main
+from auth import LoginRateLimiter
 from main import app, get_session
+from tests.fake_redis import FakeRedis
 
 
 class BrokenSession:
@@ -15,7 +18,9 @@ class BrokenSession:
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    # ใช้ Redis ปลอมสำหรับตัวนับ login ให้ test นี้ทดสอบแค่กรณีฐานข้อมูลล่ม
+    monkeypatch.setattr(main, "login_limiter", LoginRateLimiter(max_attempts=5, window_seconds=900, client=FakeRedis()))
     app.dependency_overrides[get_session] = BrokenSession
     yield TestClient(app)
     app.dependency_overrides.clear()

@@ -1,4 +1,5 @@
 from auth import hash_password, verify_password, password_problem, LoginRateLimiter
+from tests.fake_redis import FakeRedis
 
 
 def test_hash_does_not_contain_password():
@@ -41,16 +42,13 @@ def test_extremely_long_password_is_rejected():
 
 
 
-class FakeClock:
-    def __init__(self):
-        self.now = 0.0
-
-    def __call__(self):
-        return self.now
+def make_limiter():
+    fake = FakeRedis()
+    return LoginRateLimiter(max_attempts=3, window_seconds=60, client=fake), fake
 
 
 def test_login_blocked_after_too_many_failures():
-    limiter = LoginRateLimiter(max_attempts=3, window_seconds=60, clock=FakeClock())
+    limiter, _ = make_limiter()
     for _ in range(3):
         limiter.record_failure("1.2.3.4:admin")
     assert limiter.is_blocked("1.2.3.4:admin")
@@ -58,17 +56,36 @@ def test_login_blocked_after_too_many_failures():
 
 
 def test_login_block_expires_after_window():
-    clock = FakeClock()
-    limiter = LoginRateLimiter(max_attempts=3, window_seconds=60, clock=clock)
+    limiter, fake = make_limiter()
     for _ in range(3):
         limiter.record_failure("1.2.3.4:admin")
-    clock.now = 61
+    fake.advance(61)
     assert not limiter.is_blocked("1.2.3.4:admin")
 
 
+def test_window_starts_at_first_failure_not_last():
+    # ถ้าทุกครั้งที่ผิดต่อเวลาใหม่ ผู้โจมตีที่เดาช้าๆ จะทำให้ผู้ใช้จริงโดนล็อกได้เรื่อยๆ
+    limiter, fake = make_limiter()
+    limiter.record_failure("1.2.3.4:admin")
+    fake.advance(50)
+    limiter.record_failure("1.2.3.4:admin")
+    fake.advance(11)
+    assert fake.get("login_failures:1.2.3.4:admin") is None
+
+
 def test_successful_login_resets_counter():
-    limiter = LoginRateLimiter(max_attempts=3, window_seconds=60, clock=FakeClock())
+    limiter, _ = make_limiter()
     for _ in range(3):
         limiter.record_failure("1.2.3.4:admin")
     limiter.reset("1.2.3.4:admin")
     assert not limiter.is_blocked("1.2.3.4:admin")
+
+
+def test_counter_survives_a_new_limiter_instance():
+    # จำลองการ restart API: สร้าง limiter ตัวใหม่แต่ใช้ Redis เดิม ตัวนับต้องยังอยู่
+    fake = FakeRedis()
+    before_restart = LoginRateLimiter(max_attempts=3, window_seconds=60, client=fake)
+    for _ in range(3):
+        before_restart.record_failure("1.2.3.4:admin")
+    after_restart = LoginRateLimiter(max_attempts=3, window_seconds=60, client=fake)
+    assert after_restart.is_blocked("1.2.3.4:admin")
