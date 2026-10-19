@@ -75,11 +75,11 @@ VulnCompass is a security tool, so it has to be safe to run. Choices made on pur
 
 | Area | What it does |
 |---|---|
-| Authentication | Argon2 password hashes · `HttpOnly`, `SameSite=Strict` session cookie · login rate limit per IP and username · API key compared in constant time · fails closed (503) if no API key is configured |
+| Authentication | Argon2 password hashes · server-side sessions in Redis: the `HttpOnly`, `SameSite=Strict` cookie holds only a random ID (stored as a SHA-256 hash), so logout revokes copies of the cookie immediately · login rate limit per IP and username, kept in Redis so a restart does not reset it · API key compared in constant time · fails closed (503) if no API key is configured or Redis is unavailable |
 | Input that triggers scans | Repo paths must be inside an allowlist (`realpath` + `commonpath`, so `..` cannot escape) · DAST hosts must be on an allowlist · image names are validated so they cannot be read as Trivy options |
 | Report downloads | The file path stored in the database is checked again to be inside `reports/` before it is sent |
 | XSS in reports | Finding titles come from code written by someone else, so every report template is always autoescaped, with a test that fails if escaping is ever turned off |
-| Errors | Database outages return 503 with a generic message. Hosts, ports, and usernames go to the server log only |
+| Errors | Database or Redis outages return 503 with a generic message. Hosts, ports, and usernames go to the server log only |
 | Containers | Run as a non-root user · only `127.0.0.1:8080` is published (the API port is internal) · the scan target folder is mounted read-only · `.env` is excluded from images · **no `docker.sock` mount** (see the trade-off below) |
 | Reverse proxy | nginx sets `X-Forwarded-For` to `$remote_addr` instead of appending the client's header, so an attacker cannot spoof a new IP on each guess to get around the login rate limit |
 | Supply chain | GitHub Actions pinned by commit SHA · Trivy binary verified by SHA-256 · `npm ci --ignore-scripts` · base images pinned to exact versions · new versions adopted only after they are two weeks old · CI token is read-only |
@@ -91,8 +91,9 @@ VulnCompass is a security tool, so it has to be safe to run. Choices made on pur
 |---|---|
 | A logged-in user makes the worker scan or read arbitrary host files | Path allowlist, read-only mount, validated image names |
 | A malicious target repo injects script into the report (stored XSS) | Autoescape on every template plus a regression test |
-| Credential guessing | Rate limit keyed by real client IP; proxy headers cannot be spoofed |
-| Leaked secrets | Secrets only in `.env` (gitignored, never baked into images); Postgres and Redis bound to localhost |
+| Credential guessing | Rate limit keyed by real client IP and stored in Redis, so restarts do not reset it; proxy headers cannot be spoofed |
+| Stolen session cookie | Sessions live on the server, so logout or expiry makes every copy of the cookie useless |
+| Leaked secrets | Secrets only in `.env` (gitignored, never baked into images); Postgres and Redis bound to localhost, and Redis requires a password |
 | Compromised CI dependency | SHA-pinned actions, checksum-verified binaries, read-only token |
 
 **Incident handled during development:** the database password was found committed in `alembic.ini`. It was rotated rather than rewriting git history, the config was changed to read from the environment, and database ports were rebound to localhost. The old password was confirmed to be rejected.
@@ -104,7 +105,7 @@ VulnCompass is a security tool, so it has to be safe to run. Choices made on pur
 Requirements: Docker Desktop.
 
 ```powershell
-Copy-Item .env.example .env      # then fill in passwords and secrets
+Copy-Item .env.example .env      # then fill in passwords and secrets, including REDIS_PASSWORD
 docker compose --profile app up -d --build
 docker compose exec api python manage_users.py create admin
 ```
@@ -153,7 +154,7 @@ python run_pipeline.py --help
 ## Testing and CI
 
 ```powershell
-pytest -q                          # 110 tests
+pytest -q                          # 128 tests
 cd frontend; npm run lint; npm run build
 ```
 

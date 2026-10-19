@@ -75,11 +75,11 @@ VulnCompass เป็นเครื่องมือ security ตัวระ�
 
 | ด้าน | ทำอะไร |
 |---|---|
-| การยืนยันตัวตน | เก็บรหัสผ่านด้วย Argon2 · session cookie เป็น `HttpOnly` และ `SameSite=Strict` · จำกัดการ login ผิดตาม IP และชื่อผู้ใช้ · เทียบ API key แบบใช้เวลาคงที่ (constant time) · ถ้าไม่ได้ตั้ง API key จะปฏิเสธทั้งหมด (fail closed, 503) |
+| การยืนยันตัวตน | เก็บรหัสผ่านด้วย Argon2 · session เก็บฝั่ง server ใน Redis: cookie (`HttpOnly`, `SameSite=Strict`) มีแค่รหัสสุ่ม และ Redis เก็บแค่ SHA-256 ของรหัสนั้น กด logout แล้วสำเนา cookie ใช้ไม่ได้ทันที · จำกัดการ login ผิดตาม IP และชื่อผู้ใช้ โดยเก็บตัวนับใน Redis จึงไม่หายเมื่อ restart · เทียบ API key แบบใช้เวลาคงที่ (constant time) · ถ้าไม่ได้ตั้ง API key หรือ Redis ใช้ไม่ได้ จะปฏิเสธทั้งหมด (fail closed, 503) |
 | ข้อมูลที่ใช้สั่งสแกน | path ต้องอยู่ใน allowlist (ใช้ `realpath` + `commonpath` จึงหลบออกด้วย `..` ไม่ได้) · host ของ DAST ต้องอยู่ใน allowlist · ตรวจชื่อ image ไม่ให้ Trivy อ่านเป็น option |
 | ดาวน์โหลดรายงาน | ตรวจ path ที่เก็บในฐานข้อมูลซ้ำว่าอยู่ใต้ `reports/` จริงก่อนส่งไฟล์ |
 | XSS ในรายงาน | ชื่อช่องโหว่มาจากโค้ดที่คนอื่นเขียน template ทุกตัวจึง autoescape เสมอ และมี test ที่จะพังทันทีถ้ามีคนปิด escape |
-| ข้อความ error | ฐานข้อมูลล่มตอบ 503 พร้อมข้อความทั่วไป ส่วน host, port และชื่อผู้ใช้บันทึกไว้แค่ใน log ฝั่ง server |
+| ข้อความ error | ฐานข้อมูลหรือ Redis ล่มตอบ 503 พร้อมข้อความทั่วไป ส่วน host, port และชื่อผู้ใช้บันทึกไว้แค่ใน log ฝั่ง server |
 | Container | รันเป็น user ที่ไม่ใช่ root · เปิดออกมาที่เครื่องแค่ `127.0.0.1:8080` (port ของ API อยู่ข้างในเท่านั้น) · โฟลเดอร์ที่จะสแกน mount แบบอ่านอย่างเดียว · ไม่ใส่ `.env` ลงใน image · **ไม่ mount `docker.sock`** (ดู trade-off ด้านล่าง) |
 | Reverse proxy | nginx ตั้ง `X-Forwarded-For` เป็น `$remote_addr` แทนการต่อท้าย header ที่ผู้ใช้ส่งมา ผู้โจมตีจึงปลอม IP ใหม่ทุกครั้งที่เดารหัสผ่านเพื่อหลบ rate limit ไม่ได้ |
 | Supply chain | ล็อก GitHub Actions ด้วย commit SHA · ตรวจ SHA-256 ของ Trivy · `npm ci --ignore-scripts` · ล็อกเวอร์ชัน base image · ใช้เวอร์ชันใหม่หลังออกมาแล้วอย่างน้อย 2 สัปดาห์ · token ของ CI อ่านได้อย่างเดียว |
@@ -91,8 +91,9 @@ VulnCompass เป็นเครื่องมือ security ตัวระ�
 |---|---|
 | ผู้ใช้ที่ login แล้วสั่ง worker ให้สแกนหรืออ่านไฟล์อื่นในเครื่อง | allowlist ของ path, mount แบบอ่านอย่างเดียว, ตรวจชื่อ image |
 | repo ที่ถูกสแกนแฝงสคริปต์มากับรายงาน (stored XSS) | autoescape ทุก template + regression test |
-| เดารหัสผ่าน | rate limit ตาม IP จริงของผู้ใช้ และปลอม proxy header ไม่ได้ |
-| ความลับรั่ว | ความลับอยู่ใน `.env` เท่านั้น (อยู่ใน gitignore และไม่ถูกใส่ใน image) · Postgres และ Redis เปิดเฉพาะ localhost |
+| เดารหัสผ่าน | rate limit ตาม IP จริงของผู้ใช้ เก็บใน Redis จึงไม่หายเมื่อ restart และปลอม proxy header ไม่ได้ |
+| session cookie ถูกขโมย | session อยู่ฝั่ง server กด logout หรือหมดอายุแล้วสำเนา cookie ทุกชุดใช้ไม่ได้ |
+| ความลับรั่ว | ความลับอยู่ใน `.env` เท่านั้น (อยู่ใน gitignore และไม่ถูกใส่ใน image) · Postgres และ Redis เปิดเฉพาะ localhost และ Redis ต้องใส่รหัสผ่าน |
 | dependency ของ CI ถูกแก้ | action ล็อกด้วย SHA, binary ตรวจ checksum, token อ่านอย่างเดียว |
 
 **เหตุการณ์จริงระหว่างพัฒนา:** เจอรหัสผ่านฐานข้อมูลถูก commit อยู่ใน `alembic.ini` จึงเปลี่ยนรหัส (rotate) แทนการเขียน git history ใหม่ แก้ให้อ่านค่าจาก environment และเปลี่ยนให้ port ของฐานข้อมูลเปิดเฉพาะ localhost แล้วตรวจยืนยันว่ารหัสเก่าใช้ไม่ได้แล้ว
@@ -104,7 +105,7 @@ VulnCompass เป็นเครื่องมือ security ตัวระ�
 ต้องมี: Docker Desktop
 
 ```powershell
-Copy-Item .env.example .env      # แล้วเติมรหัสผ่านและค่าลับต่างๆ
+Copy-Item .env.example .env      # แล้วเติมรหัสผ่านและค่าลับต่างๆ รวมถึง REDIS_PASSWORD
 docker compose --profile app up -d --build
 docker compose exec api python manage_users.py create admin
 ```
@@ -153,7 +154,7 @@ python run_pipeline.py --help
 ## Test และ CI
 
 ```powershell
-pytest -q                          # 110 test
+pytest -q                          # 128 test
 cd frontend; npm run lint; npm run build
 ```
 
