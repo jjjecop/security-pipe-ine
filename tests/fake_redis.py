@@ -38,6 +38,13 @@ class FakeRedis:
     def get(self, name):
         return self.values.get(name)
 
+    def set(self, name, value, ex=None):
+        self.values[name] = str(value)
+        self.expires_at.pop(name, None)
+        if ex is not None:
+            self.expires_at[name] = self.now + ex
+        return True
+
     def incr(self, name):
         self.values[name] = str(int(self.values.get(name, 0)) + 1)
         return int(self.values[name])

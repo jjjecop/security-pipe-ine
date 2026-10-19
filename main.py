@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from db import engine
 from models import Finding, Project, Report, ScanJob, ScanRun, User, utc_now
-from auth import LoginRateLimiter, hash_password, verify_password
+from auth import LoginRateLimiter, SessionStore, hash_password, verify_password
 from pydantic import BaseModel, Field
 from save_findings import create_scan_job, get_or_create_project
 from scan_policy import is_path_inside, is_url_allowed, resolve_scans, split_setting
@@ -46,6 +46,7 @@ app.add_middleware(
 )
 
 logger = logging.getLogger("uvicorn.error")
+session_store = SessionStore(ttl_seconds=SESSION_MAX_AGE)
 
 
 @app.exception_handler(OperationalError)
@@ -54,6 +55,13 @@ def database_unavailable(request: Request, exc: OperationalError):
     # รายละเอียด error มี host และ port ของฐานข้อมูล บันทึกไว้ฝั่ง server เท่านั้น ไม่ส่งให้ผู้ใช้
     logger.error("ต่อฐานข้อมูลไม่ได้ (%s %s): %s", request.method, request.url.path, exc.orig)
     return JSONResponse(status_code=503, content={"detail": "ฐานข้อมูลไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง"})
+
+
+@app.exception_handler(redis.exceptions.RedisError)
+def redis_unavailable(request: Request, exc: redis.exceptions.RedisError):
+    # session และคิวงานอยู่ใน Redis ถ้าต่อไม่ได้ให้ตอบ 503 และไม่ส่งรายละเอียดให้ผู้ใช้ เหมือนกรณีฐานข้อมูลล่ม
+    logger.error("ต่อ Redis ไม่ได้ (%s %s): %s", request.method, request.url.path, exc)
+    return JSONResponse(status_code=503, content={"detail": "ระบบไม่พร้อมใช้งานชั่วคราว กรุณาลองใหม่ภายหลัง"})
 
 
 def get_session():
@@ -75,7 +83,8 @@ def require_api_key(api_key: str | None = Depends(api_key_header)):
 
 
 def get_current_user(request: Request, db: Session = Depends(get_session)) -> User:
-    user_id = request.session.get("user_id")
+    session_id = request.session.get("sid")
+    user_id = session_store.get_user_id(session_id) if session_id else None
     user = db.get(User, user_id) if user_id else None
     # เช็ก is_active ทุกครั้ง: ปิดบัญชีแล้ว cookie เก่าต้องใช้ไม่ได้ทันที
     if user is None or not user.is_active:
@@ -458,7 +467,7 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_sessio
     db.commit()
 
     request.session.clear()
-    request.session["user_id"] = user.id
+    request.session["sid"] = session_store.create(user.id)
     return {"username": user.username}
 
 
@@ -469,6 +478,10 @@ def me(user: User = Depends(get_current_user)):
 
 @app.post("/auth/logout")
 def logout(request: Request):
+    session_id = request.session.get("sid")
+    if session_id:
+        # ลบที่ฝั่ง server ด้วย ไม่ใช่แค่ล้าง cookie ในเบราว์เซอร์ cookie ที่ถูกคัดลอกไปก่อนหน้าจึงใช้ไม่ได้อีก
+        session_store.delete(session_id)
     request.session.clear()
     return {"status": "logged out"}
 

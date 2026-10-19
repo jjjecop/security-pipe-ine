@@ -1,3 +1,6 @@
+import hashlib
+import secrets
+
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 
@@ -57,3 +60,34 @@ class LoginRateLimiter:
 
     def reset(self, key: str):
         self._redis().delete(self._key(key))
+
+
+class SessionStore:
+    # cookie เก็บแค่รหัสสุ่ม ส่วนข้อมูลว่าเป็นใครอยู่ใน Redis
+    # ถ้าเก็บ user_id ไว้ใน cookie ตรงๆ (แบบเดิม) กด logout แล้ว cookie ที่ถูกขโมยไปยังใช้ได้จนหมดอายุ
+    # แบบนี้ logout หรือหมดอายุเมื่อไร ลบใน Redis แล้ว cookie นั้นใช้ไม่ได้ทันที
+    def __init__(self, ttl_seconds: int, client=None):
+        self.ttl_seconds = ttl_seconds
+        self.client = client
+
+    def _redis(self):
+        if self.client is None:
+            self.client = get_redis()
+        return self.client
+
+    @staticmethod
+    def _key(session_id: str) -> str:
+        # เก็บแค่ hash ของรหัส ถ้าข้อมูลใน Redis หลุด ก็เอาไปทำ cookie ที่ใช้ได้ไม่ได้
+        return "session:" + hashlib.sha256(session_id.encode()).hexdigest()
+
+    def create(self, user_id: int) -> str:
+        session_id = secrets.token_urlsafe(32)
+        self._redis().set(self._key(session_id), user_id, ex=self.ttl_seconds)
+        return session_id
+
+    def get_user_id(self, session_id: str) -> int | None:
+        value = self._redis().get(self._key(session_id))
+        return int(value) if value is not None else None
+
+    def delete(self, session_id: str):
+        self._redis().delete(self._key(session_id))
