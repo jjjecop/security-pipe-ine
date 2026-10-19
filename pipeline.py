@@ -15,7 +15,7 @@ def run_full_pipeline(
     with_remediation=False,
     use_epss=True,
     make_report=True,
-    output_dir="reports",
+    output_dir=None,
 ):
     # แกนกลางที่ CLI และ worker ใช้ร่วมกัน: สแกน -> CWE -> EPSS -> Gemini -> รายงาน
     final_status = execute_scan_job(session, scan_job, project, repo_path=repo_path, image=image, target_url=target_url)

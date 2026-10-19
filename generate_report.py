@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 
 from jinja2 import Environment, FileSystemLoader
 
-TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+# ผูกกับโฟลเดอร์ของโปรเจกต์ ไม่ใช่โฟลเดอร์ที่เปิดโปรแกรม รันจากที่ไหนรายงานก็ไปอยู่ที่เดียวกับที่ API อ่าน
+REPORTS_DIR = os.path.join(BASE_DIR, "reports")
 
 # ชื่อช่องโหว่และ path มาจากโค้ดที่ถูกสแกน ซึ่งคนนอกเป็นคนเขียน จึงต้อง escape ทุกค่าเสมอ ไม่ขึ้นกับนามสกุลไฟล์
 # Semgrep เตือนเพราะกฎนี้เขียนไว้สำหรับ Flask เราไม่ได้ใช้ Flask และเปิด autoescape แล้ว (มี test ใน test_report_escaping.py)
@@ -151,7 +154,19 @@ def build_report_data(session, project_id: int):
     return severity_data, top_findings_data
 
 
-def generate_report(session, project: Project, scan_job_id: int | None = None, output_dir: str = "reports") -> str:
+def path_for_database(path: str) -> str:
+    # เก็บแบบนับจากโฟลเดอร์โปรเจกต์และใช้ / API จึงเปิดไฟล์ได้ทั้งบน Windows และใน Docker (/app)
+    try:
+        relative = os.path.relpath(path, BASE_DIR)
+    except ValueError:
+        # คนละไดรฟ์ (เช่น D:) ทำเป็น path แบบสัมพัทธ์ไม่ได้
+        return path
+    if relative.startswith(".."):
+        return path
+    return relative.replace(os.sep, "/")
+
+
+def generate_report(session, project: Project, scan_job_id: int | None = None, output_dir: str | None = None) -> str:
     from weasyprint import HTML
 
     severity_data, top_findings_data = build_report_data(session, project.id)
@@ -159,7 +174,7 @@ def generate_report(session, project: Project, scan_job_id: int | None = None, o
     now = datetime.now()
     report_date = now.strftime("%Y-%m-%d %H:%M")
     safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", project.name)
-    report_dir = os.path.join(output_dir, f"{safe_name}_{now.strftime('%Y%m%d_%H%M%S')}")
+    report_dir = os.path.join(output_dir or REPORTS_DIR, f"{safe_name}_{now.strftime('%Y%m%d_%H%M%S')}")
     os.makedirs(report_dir, exist_ok=True)
 
     context = dict(
@@ -187,7 +202,7 @@ def generate_report(session, project: Project, scan_job_id: int | None = None, o
     if scan_job_id is not None:
         session.add(Report(
             scan_job_id=scan_job_id,
-            file_path=pdf_path,
+            file_path=path_for_database(pdf_path),
             summary={
                 "severity": {row["severity"]: row["count"] for row in severity_data},
                 "total_open": sum(row["count"] for row in severity_data),
@@ -207,7 +222,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="สร้างรายงานจาก finding ที่อยู่ในฐานข้อมูล")
     parser.add_argument("--project", required=True, help="ชื่อโปรเจกต์")
-    parser.add_argument("--output-dir", default="reports")
+    parser.add_argument("--output-dir", help="โฟลเดอร์เก็บรายงาน (ค่าเริ่มต้น: reports ในโฟลเดอร์โปรเจกต์)")
     args = parser.parse_args()
 
     with Session(engine) as session:

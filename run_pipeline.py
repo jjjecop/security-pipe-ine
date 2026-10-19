@@ -32,7 +32,7 @@ def parse_args():
         "--scans",
         help=f"เลือกสแกนที่จะรัน คั่นด้วย comma จาก {','.join(SCAN_TYPES)} (ค่าเริ่มต้น: เลือกจาก argument ที่ให้มา)",
     )
-    parser.add_argument("--output-dir", default="reports", help="โฟลเดอร์เก็บรายงาน (ค่าเริ่มต้น: reports)")
+    parser.add_argument("--output-dir", help="โฟลเดอร์เก็บรายงาน (ค่าเริ่มต้น: reports ในโฟลเดอร์โปรเจกต์)")
     parser.add_argument("--no-report", action="store_true", help="สแกนอย่างเดียว ไม่สร้างรายงาน")
     parser.add_argument("--with-remediation", action="store_true", help="ให้ Gemini เขียนคำแนะนำการแก้ไขให้ CWE ที่ยังไม่มี (ประมาณ 13-40 วินาทีต่อ CWE)")
     parser.add_argument("--no-epss", action="store_true", help="ไม่ดึงคะแนน EPSS จาก FIRST.org (ใช้ตอนไม่มี internet)")

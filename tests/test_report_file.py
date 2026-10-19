@@ -1,8 +1,10 @@
+import os
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 
+import generate_report
 import main
 
 
@@ -55,3 +57,13 @@ def test_windows_style_path_cannot_escape_reports_dir(monkeypatch, tmp_path):
     with pytest.raises(HTTPException) as error:
         main.report_file_response(report, "NodeGoat")
     assert error.value.status_code == 404
+
+
+def test_report_path_is_stored_relative_to_the_project():
+    pdf = os.path.join(generate_report.REPORTS_DIR, "NodeGoat_20261019_103848", "security_report.pdf")
+    assert generate_report.path_for_database(pdf) == "reports/NodeGoat_20261019_103848/security_report.pdf"
+
+
+def test_report_outside_the_project_keeps_its_full_path(tmp_path):
+    pdf = str(tmp_path / "security_report.pdf")
+    assert generate_report.path_for_database(pdf) == pdf
