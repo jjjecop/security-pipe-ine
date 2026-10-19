@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 QUEUE_NAME = "scan_queue"
+# งานที่ worker หยิบไปแล้วแต่ยังทำไม่เสร็จ ถ้า worker ดับกลางคัน งานจะยังอยู่ที่นี่ให้ตามเก็บได้
+PROCESSING_NAME = "scan_processing"
 
 
 def get_redis():
@@ -32,8 +34,17 @@ def enqueue_scan(scan_job_id: int, repo_path=None, image=None, target_url=None, 
 
 def wait_for_scan(timeout: int = 5, client=None) -> dict | None:
     # รอสูงสุด timeout วินาที ถ้าไม่มีงานให้คืน None เพื่อให้ worker กลับมาเช็กว่าถูกสั่งหยุดหรือยัง
-    item = (client or get_redis()).blpop(QUEUE_NAME, timeout=timeout)
-    if item is None:
+    # BLMOVE ย้ายงานจากคิวไปไว้ใน PROCESSING_NAME ในคำสั่งเดียว งานจึงไม่หายไประหว่างทาง
+    payload = (client or get_redis()).blmove(QUEUE_NAME, PROCESSING_NAME, timeout)
+    if payload is None:
         return None
-    _, payload = item
     return json.loads(payload)
+
+
+def finish_scan(task: dict, client=None):
+    # json.dumps ของ dict เดิมได้ข้อความเดียวกับตอน enqueue_scan จึงลบรายการที่ตรงกันได้
+    (client or get_redis()).lrem(PROCESSING_NAME, 1, json.dumps(task))
+
+
+def list_unfinished_scans(client=None) -> list[dict]:
+    return [json.loads(payload) for payload in (client or get_redis()).lrange(PROCESSING_NAME, 0, -1)]

@@ -1,18 +1,5 @@
-from scan_queue import enqueue_scan, wait_for_scan
-
-
-class FakeRedis:
-    def __init__(self):
-        self.lists = {}
-
-    def rpush(self, name, value):
-        self.lists.setdefault(name, []).append(value)
-
-    def blpop(self, name, timeout=0):
-        items = self.lists.get(name)
-        if not items:
-            return None
-        return name, items.pop(0)
+from scan_queue import QUEUE_NAME, enqueue_scan, finish_scan, list_unfinished_scans, wait_for_scan
+from tests.fake_redis import FakeRedis
 
 
 def test_enqueued_scan_comes_back_unchanged():
@@ -38,3 +25,13 @@ def test_queue_is_first_in_first_out():
 def test_empty_queue_returns_none():
     assert wait_for_scan(client=FakeRedis()) is None
 
+
+def test_taken_scan_stays_in_processing_until_finished():
+    fake = FakeRedis()
+    enqueue_scan(7, repo_path="C:/repo", client=fake)
+    task = wait_for_scan(client=fake)
+    assert fake.lists[QUEUE_NAME] == []
+    assert list_unfinished_scans(client=fake) == [task]
+
+    finish_scan(task, client=fake)
+    assert list_unfinished_scans(client=fake) == []
