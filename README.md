@@ -180,6 +180,10 @@ cd frontend; npm run lint; npm run build
 | `alembic/`, `init_db.py` | Database migrations |
 | `docs/` | Development reports for each phase (Thai) |
 
+## License and security
+
+Released under the [MIT License](LICENSE). To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
 ## Tech stack
 
 Python 3.14 · FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL 16 · Redis 7 · WeasyPrint · Jinja2 · React 19 · TypeScript · Vite · Docker Compose · nginx · GitHub Actions · Semgrep · Trivy · OWASP ZAP · FIRST EPSS · Google Gemini

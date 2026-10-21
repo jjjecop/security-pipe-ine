@@ -180,6 +180,10 @@ cd frontend; npm run lint; npm run build
 | `alembic/`, `init_db.py` | migration ของฐานข้อมูล |
 | `docs/` | รายงานการพัฒนาแต่ละขั้น (ภาษาไทย) |
 
+## License และการแจ้งช่องโหว่
+
+เผยแพร่ภายใต้ [MIT License](LICENSE) ถ้าพบช่องโหว่ใน VulnCompass ดูวิธีแจ้งได้ที่ [SECURITY.md](SECURITY.md)
+
 ## เทคโนโลยีที่ใช้
 
 Python 3.14 · FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL 16 · Redis 7 · WeasyPrint · Jinja2 · React 19 · TypeScript · Vite · Docker Compose · nginx · GitHub Actions · Semgrep · Trivy · OWASP ZAP · FIRST EPSS · Google Gemini
