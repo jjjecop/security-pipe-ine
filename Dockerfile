@@ -5,8 +5,10 @@ FROM python:3.14.8-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# ไลบรารีที่ WeasyPrint ใช้สร้าง PDF + ฟอนต์ไทย และ curl สำหรับโหลด Trivy
+# อัปเดต package ของระบบก่อน (image ต้นทางอาจยังไม่รวมแพตช์ความปลอดภัยล่าสุดของ Debian)
+# แล้วติดตั้งไลบรารีที่ WeasyPrint ใช้สร้าง PDF + ฟอนต์ไทย และ curl สำหรับโหลด Trivy
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
         libpango-1.0-0 libpangoft2-1.0-0 fonts-thai-tlwg curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*

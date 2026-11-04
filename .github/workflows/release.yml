@@ -9,9 +9,52 @@ permissions:
   contents: read
 
 jobs:
-  image:
+  # ขั้นที่ 1: build และสแกนทุก image ก่อน ยังไม่ publish อะไรเลย
+  scan:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
+
+    strategy:
+      # ให้สแกนครบทุก image แม้ตัวใดตัวหนึ่งจะไม่ผ่าน จะได้เห็นปัญหาทั้งหมดในรอบเดียว
+      fail-fast: false
+      matrix:
+        include:
+          - name: vulncompass
+            context: .
+          - name: vulncompass-web
+            context: frontend
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build the image for scanning
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          load: true
+          tags: scan-target:latest
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Install Trivy
+        run: sudo bash scripts/install_trivy.sh
+
+      # ไม่ publish image ที่มีช่องโหว่ critical ซึ่งมีเวอร์ชันแก้แล้ว (ถ้ายังไม่มีเวอร์ชันแก้ ก็อัปเดตไม่ได้อยู่ดี)
+      - name: Block the release on fixable critical vulnerabilities
+        run: trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 scan-target:latest
+
+  # ขั้นที่ 2: publish เฉพาะเมื่อทุก image ผ่านการสแกน
+  # ถ้าแยกไว้ใน job เดียวกัน image ที่ผ่านก่อนจะถูก publish ไปแล้ว ทั้งที่อีก image ยังไม่ผ่าน
+  publish:
+    needs: scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     strategy:
       matrix:
@@ -40,23 +83,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      # build ไว้ในเครื่องของ runner ก่อน เพื่อสแกนก่อนตัดสินใจ publish
-      - name: Build the image for scanning
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: ${{ matrix.context }}
-          load: true
-          tags: scan-target:latest
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
-
-      - name: Install Trivy
-        run: sudo bash scripts/install_trivy.sh
-
-      # ไม่ publish image ที่มีช่องโหว่ critical ซึ่งมีเวอร์ชันแก้แล้ว (ถ้ายังไม่มีเวอร์ชันแก้ ก็อัปเดตไม่ได้อยู่ดี)
-      - name: Block the release on fixable critical vulnerabilities
-        run: trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 scan-target:latest
-
       - name: Work out the image tags
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
@@ -74,7 +100,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ใช้ cache จากขั้น build ด้านบน จึงไม่ build ใหม่ทั้งหมด
+      # ใช้ cache จาก job scan จึงได้ layer ชุดเดียวกับที่ผ่านการสแกน ไม่ build ใหม่ทั้งหมด
       # sbom = รายการ package ทั้งหมดใน image, provenance = บันทึกว่า image สร้างจากที่ไหนอย่างไร
       - name: Build and push
         id: push
