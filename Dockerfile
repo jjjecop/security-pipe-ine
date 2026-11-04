@@ -19,7 +19,10 @@ WORKDIR /app
 
 # copy requirements ก่อนโค้ด ถ้าแก้แค่โค้ด Docker จะใช้ layer ที่ติดตั้งไว้แล้วซ้ำ ไม่ต้อง pip install ใหม่
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# ลบ pip ทิ้งหลังติดตั้งเสร็จ: ตอนรันไม่ได้ใช้ และ pip ฝัง library ของตัวเองมาด้วย (เช่น certifi)
+# ซึ่งมักตามเวอร์ชันที่แก้ช่องโหว่ไม่ทัน ถ้าเก็บไว้ Trivy จะเจอ และยังเป็นเครื่องมือให้ผู้บุกรุกติดตั้งของเพิ่มได้ด้วย
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip uninstall -y pip
 
 COPY . .
 
