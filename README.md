@@ -31,7 +31,7 @@ After the scans finish, the pipeline:
 5. **Scores risk** from 0 to 10 using severity, CVSS, and EPSS, so that a medium finding that is being actively exploited can rank above a high finding that is not.
 6. **Reports** as an interactive HTML dashboard and a printable PDF.
 
-## Three ways to use it
+## Ways to use it
 
 | Interface | Use it for | Entry point |
 |---|---|---|
@@ -49,6 +49,40 @@ All three call the same core function, `run_full_pipeline()`.
 | ![Scans](docs/images/scans.png) | ![Report](docs/images/report.png) |
 
 </details>
+
+## Use it in your own GitHub repository
+
+Add `.github/workflows/vulncompass.yml` to your repository. Every push and pull request is then scanned, the PDF report is attached to the run, and the job fails when high or critical findings are open.
+
+```yaml
+name: VulnCompass
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: jjjecop/security-pipe-ine@v1.1.0
+        with:
+          fail-on: high          # critical, high, medium, low, info, or "" to never fail
+          # path: backend        # scan a sub-folder instead of the whole repository
+          # image: ghcr.io/you/app:1.0.0   # also scan a container image
+```
+
+| Input | Default | Meaning |
+|---|---|---|
+| `path` | `.` | Folder to scan, relative to the repository root |
+| `scans` | `sast,dependency` (+ `container` when `image` is set) | Which scans to run |
+| `image` | | Docker image for the container scan |
+| `fail-on` | `high` | Fail the job when open findings reach this severity |
+| `project` | repository name | Name shown in the report |
+| `upload-report` | `true` | Attach the PDF report as the `vulncompass-report` artifact |
+
+The action runs on Ubuntu runners and needs no secrets. It starts a throwaway PostgreSQL container for the run and removes it afterwards. DAST is not offered in CI, because it needs a running copy of your web app. For stronger supply-chain safety, pin the action to a full commit SHA instead of a tag.
 
 ## Architecture
 
