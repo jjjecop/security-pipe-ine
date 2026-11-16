@@ -1,0 +1,154 @@
+name: VulnCompass security scan
+description: Scan a repository with Semgrep (SAST) and Trivy (dependencies, container image), produce a PDF report, and fail the job on serious findings.
+author: jjjecop
+
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  path:
+    description: Folder to scan, relative to the repository root.
+    required: false
+    default: "."
+  scans:
+    description: "Comma-separated scans to run: sast, dependency, container. Empty means sast,dependency, plus container when image is set."
+    required: false
+    default: ""
+  image:
+    description: Docker image to scan (needed for the container scan), for example ghcr.io/owner/app:1.2.3.
+    required: false
+    default: ""
+  fail-on:
+    description: "Fail the job if open findings of this severity or higher remain: critical, high, medium, low, info. Empty never fails on findings."
+    required: false
+    default: high
+  project:
+    description: Project name shown in the report. Defaults to the repository name.
+    required: false
+    default: ""
+  upload-report:
+    description: Attach the PDF report to the workflow run as an artifact.
+    required: false
+    default: "true"
+
+outputs:
+  report-dir:
+    description: Folder that holds the generated report.
+    value: ${{ steps.paths.outputs.report-dir }}
+
+runs:
+  using: composite
+  steps:
+    # ค่าจาก input ทุกตัวส่งผ่าน env เท่านั้น ไม่แทรก ${{ }} ลงในสคริปต์ตรงๆ
+    # ไม่งั้นค่าที่มีอักขระพิเศษจะกลายเป็นคำสั่ง shell (script injection)
+    - name: Prepare paths
+      id: paths
+      shell: bash
+      run: |
+        mkdir -p "$RUNNER_TEMP/vulncompass/reports"
+        echo "report-dir=$RUNNER_TEMP/vulncompass/reports" >> "$GITHUB_OUTPUT"
+
+    # ฐานข้อมูลชั่วคราวของ job นี้ composite action ใช้ services ไม่ได้ จึงเปิดเองด้วย docker run
+    # รหัสสุ่มใหม่ทุกครั้งและเก็บในไฟล์ ไม่ใส่ลง GITHUB_ENV เพื่อไม่ให้หลุดไปถึง step อื่นของผู้ใช้
+    # ใช้ port 54329 เผื่อ job ของผู้ใช้มี PostgreSQL อยู่ที่ 5432 แล้ว
+    - name: Start a temporary database
+      shell: bash
+      run: |
+        password="$(openssl rand -hex 24)"
+        echo "::add-mask::$password"
+        printf '%s' "$password" > "$RUNNER_TEMP/vulncompass/db_password"
+        docker run -d --name vulncompass-db \
+          -e POSTGRES_USER=vulncompass \
+          -e POSTGRES_PASSWORD="$password" \
+          -e POSTGRES_DB=vulncompass \
+          -p 127.0.0.1:54329:5432 \
+          postgres:16-alpine > /dev/null
+        for _ in $(seq 1 30); do
+          if docker exec vulncompass-db pg_isready -U vulncompass -q; then
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "::error::The temporary database did not start"
+        exit 1
+
+    - name: Install Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: "3.14"
+
+    # ใช้ venv แยก จะได้ไม่ปน package กับ Python ของผู้ใช้
+    - name: Install VulnCompass
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 fonts-thai-tlwg > /dev/null
+        python -m venv "$RUNNER_TEMP/vulncompass/venv"
+        "$RUNNER_TEMP/vulncompass/venv/bin/pip" install --quiet -r "$GITHUB_ACTION_PATH/requirements.txt"
+        sudo bash "$GITHUB_ACTION_PATH/scripts/install_trivy.sh"
+
+    - name: Scan
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_SCANS: ${{ inputs.scans }}
+        INPUT_IMAGE: ${{ inputs.image }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_PROJECT: ${{ inputs.project }}
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+        REPORT_DIR: ${{ steps.paths.outputs.report-dir }}
+      run: |
+        set -euo pipefail
+        export POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=54329
+        export POSTGRES_USER=vulncompass POSTGRES_DB=vulncompass
+        POSTGRES_PASSWORD="$(cat "$RUNNER_TEMP/vulncompass/db_password")"
+        export POSTGRES_PASSWORD
+
+        repo="$(realpath -m "$GITHUB_WORKSPACE/$INPUT_PATH")"
+        case "$repo/" in
+          "$GITHUB_WORKSPACE"/*) ;;
+          *) echo "::error::path must stay inside the repository"; exit 1 ;;
+        esac
+
+        project="${INPUT_PROJECT:-${REPOSITORY_NAME:-project}}"
+        args=(--project "$project" --repo "$repo" --output-dir "$REPORT_DIR")
+        if [ -n "$INPUT_IMAGE" ]; then args+=(--image "$INPUT_IMAGE"); fi
+        if [ -n "$INPUT_SCANS" ]; then args+=(--scans "$INPUT_SCANS"); fi
+        if [ -n "$INPUT_FAIL_ON" ]; then args+=(--fail-on "$INPUT_FAIL_ON"); fi
+
+        # สคริปต์ของ VulnCompass ใช้ path แบบ relative (เช่น alembic.ini) จึงต้องรันจากโฟลเดอร์ของ action
+        cd "$GITHUB_ACTION_PATH"
+        python="$RUNNER_TEMP/vulncompass/venv/bin/python"
+        "$python" init_db.py > /dev/null
+        "$python" seed_cwe_mapping.py > /dev/null
+        status=0
+        "$python" run_pipeline.py "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/vulncompass/scan.log" || status=$?
+
+        {
+          echo "## VulnCompass security scan"
+          echo
+          echo '```'
+          tail -n 15 "$RUNNER_TEMP/vulncompass/scan.log"
+          echo '```'
+          echo
+          echo "The full PDF report is attached to this run as **vulncompass-report**."
+        } >> "$GITHUB_STEP_SUMMARY"
+        exit "$status"
+
+    # แนบรายงานแม้สแกนจะไม่ผ่าน gate คนแก้จะได้เห็นว่าต้องแก้อะไร
+    - name: Upload report
+      if: always() && inputs.upload-report == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: vulncompass-report
+        path: ${{ steps.paths.outputs.report-dir }}
+        if-no-files-found: warn
+        retention-days: 14
+
+    - name: Remove the temporary database
+      if: always()
+      shell: bash
+      run: |
+        docker rm -f vulncompass-db > /dev/null 2>&1 || true
+        rm -f "$RUNNER_TEMP/vulncompass/db_password"

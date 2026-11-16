@@ -156,6 +156,13 @@ def make_dast_fingerprint(plugin_id: str, url: str, method: str | None, param: s
     raw_string = f"{plugin_id}:{method or ''}:{base_url}:{param or ''}"
     return hashlib.sha256(raw_string.encode("utf-8")).hexdigest()
 
+def clean_zap_cwe(value) -> str | None:
+    # ZAP ใส่ -1 หรือ 0 เมื่อการแจ้งเตือนนั้นไม่มีรหัส CWE จึงเก็บเป็นค่าว่างแทน
+    if value is None or str(value).strip() in ("", "-1", "0"):
+        return None
+    return str(value)
+
+
 def normalize_zap_finding(alert: dict, instance: dict) -> dict:
     plugin_id = alert["pluginid"]
     url = instance["uri"]
@@ -173,7 +180,7 @@ def normalize_zap_finding(alert: dict, instance: dict) -> dict:
         "description": description_clean,
         "severity_native": ZAP_RISK_MAP.get(risk_code, "info"),
         "cvss_score": None,
-        "cwe_id": alert.get("cweid"),
+        "cwe_id": clean_zap_cwe(alert.get("cweid")),
         "owasp_category": None,
         "confidence": ZAP_CONFIDENCE_MAP.get(confidence_code, "low"),
         "location_type": "http_endpoint",

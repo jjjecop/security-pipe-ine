@@ -31,7 +31,7 @@ docker compose --profile app up -d --build
 5. **คิดคะแนนความเสี่ยง** 0–10 จาก severity, CVSS และ EPSS ช่องโหว่ระดับ medium ที่กำลังถูกโจมตีจริงจึงอาจอยู่สูงกว่าระดับ high ที่ไม่มีใครโจมตี
 6. **ออกรายงาน**เป็น HTML dashboard ที่กรองและค้นหาได้ และ PDF สำหรับพิมพ์
 
-## ใช้งานได้ 3 ทาง
+## ช่องทางการใช้งาน
 
 | ช่องทาง | ใช้ทำอะไร | วิธีเข้า |
 |---|---|---|
@@ -49,6 +49,40 @@ docker compose --profile app up -d --build
 | ![Scans](docs/images/scans.png) | ![Report](docs/images/report.png) |
 
 </details>
+
+## ใช้ใน GitHub repo ของคุณเอง
+
+เพิ่มไฟล์ `.github/workflows/vulncompass.yml` ใน repo ของคุณ หลังจากนั้นทุกครั้งที่ push หรือเปิด pull request ระบบจะสแกนให้อัตโนมัติ แนบรายงาน PDF ไว้กับรอบนั้น และทำให้ job ไม่ผ่านถ้ายังมีช่องโหว่ระดับ high หรือ critical เปิดอยู่
+
+```yaml
+name: VulnCompass
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: jjjecop/security-pipe-ine@v1.1.0
+        with:
+          fail-on: high          # critical, high, medium, low, info หรือ "" ถ้าไม่ต้องการให้ job ล้ม
+          # path: backend        # สแกนเฉพาะโฟลเดอร์ย่อย แทนทั้ง repo
+          # image: ghcr.io/you/app:1.0.0   # สแกน container image ด้วย
+```
+
+| Input | ค่าเริ่มต้น | ความหมาย |
+|---|---|---|
+| `path` | `.` | โฟลเดอร์ที่จะสแกน นับจากราก repo |
+| `scans` | `sast,dependency` (เพิ่ม `container` เมื่อใส่ `image`) | เลือกว่าจะสแกนแบบไหน |
+| `image` | | Docker image สำหรับสแกน container |
+| `fail-on` | `high` | ให้ job ไม่ผ่านเมื่อมีช่องโหว่ระดับนี้ขึ้นไปเปิดอยู่ |
+| `project` | ชื่อ repo | ชื่อที่แสดงในรายงาน |
+| `upload-report` | `true` | แนบรายงาน PDF ไว้เป็น artifact ชื่อ `vulncompass-report` |
+
+action นี้รันบน runner แบบ Ubuntu และไม่ต้องใช้ secret ใดๆ ระหว่างรันจะเปิด PostgreSQL ชั่วคราวใน container แล้วลบทิ้งเมื่อจบ ส่วน DAST ใช้ใน CI ไม่ได้ เพราะต้องมีเว็บของคุณรันอยู่จริง ถ้าต้องการความปลอดภัยของ supply chain มากขึ้น ให้ล็อก action ด้วย commit SHA เต็มแทน tag
 
 ## สถาปัตยกรรม
 

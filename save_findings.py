@@ -106,6 +106,10 @@ def collect_semgrep(repo_path):
 def collect_trivy_dependency(repo_path):
     result = run_trivy_dependency_scan(repo_path)
     normalized = []
+    if not result.get("Results"):
+        # Trivy ไม่พบไฟล์รายการไลบรารี (เช่น package-lock.json) จึงไม่มีอะไรให้ตรวจ
+        # ต้องบอกผู้ใช้ เพราะผล 0 รายการแบบนี้ไม่ได้แปลว่าไม่มีช่องโหว่
+        print("[trivy-dep] คำเตือน: ไม่พบไฟล์รายการไลบรารีที่ Trivy อ่านได้ ผลการสแกนประเภทนี้จึงว่าง")
     for res in result.get("Results") or []:
         for raw in res.get("Vulnerabilities") or []:
             normalized.append(normalize_trivy_finding(raw))

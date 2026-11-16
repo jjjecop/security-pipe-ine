@@ -485,3 +485,6 @@ def logout(request: Request):
     request.session.clear()
     return {"status": "logged out"}
 
+
+
+
