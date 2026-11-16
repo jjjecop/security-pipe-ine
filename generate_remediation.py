@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from db import engine
 from models import CweOwaspMapping, Finding, Project
 from apply_cwe_mapping import normalize_cwe_id
-from cwe_to_cheatsheet import parse_owasp_index, find_cheatsheet_with_fallback, build_document_frequency, find_best_content_match
+from cwe_to_cheatsheet import parse_owasp_index
+from cheatsheet_lookup import find_cheatsheet
 from mitre_source import load_mitre_mitigations, collect_children_mitigations
 
 
@@ -74,22 +75,17 @@ def ask_gemini_to_pick(description, candidates):
     return response.text.strip()
 
 
-def remediate_one(mapping, index_data, df, n_docs, file_contents, mitre):
+def remediate_one(mapping, index_data, mitre):
     # ลองหาคำแนะนำทีละแหล่ง: Cheat Sheet -> MITRE -> MITRE ของ CWE ลูก
-    cheatsheet_file = find_cheatsheet_with_fallback(
+    # ถ้าไม่มี Cheat Sheet ที่มั่นใจว่าตรง find_cheatsheet จะคืน None แล้วไปใช้ MITRE เลย
+    # (เดิมค้นต่อจากเนื้อหาแบบ IDF ซึ่งได้เอกสารที่ไม่เกี่ยวข้องเป็นส่วนใหญ่)
+    cheatsheet_file = find_cheatsheet(
+        mapping.cwe_id,
         mapping.description,
         mapping.owasp_top10_2021,
         index_data,
         CHEATSHEETS_FOLDER,
     )
-    if cheatsheet_file is None:
-        print(f" ไม่พบใน Index/ชื่อไฟล์ ({mapping.cwe_id}) กำลังคำนวณจากเนื้อหาแบบ IDF...")
-        best_file, score = find_best_content_match(mapping.description, df, n_docs, file_contents)
-        if best_file:
-            cheatsheet_file = best_file
-            print(f" เจอจากเนื้อหา (score={score:.1f}): {best_file}")
-        else:
-            print(f"   คะแนนสูงสุดที่เจอ: {score:.1f} (ต่ำกว่าเกณฑ์จึงไม่ใช้)")
 
     if cheatsheet_file is not None:
         with open(os.path.join(CHEATSHEETS_FOLDER, cheatsheet_file), "r", encoding="utf-8") as f:
@@ -143,6 +139,18 @@ def get_project_cwe_ids(session, project_id: int) -> set[str]:
     return cwe_ids
 
 
+def clear_remediation(session, cwe_ids: set[str] | None = None) -> int:
+    # ล้างคำแนะนำเดิมเพื่อสร้างใหม่ (ใช้เมื่อแก้ขั้นตอนค้นหาเอกสารแล้วต้องการผลใหม่)
+    query = session.query(CweOwaspMapping).filter(CweOwaspMapping.remediation_workaround.isnot(None))
+    if cwe_ids is not None:
+        query = query.filter(CweOwaspMapping.cwe_id.in_(cwe_ids))
+    rows = query.all()
+    for row in rows:
+        row.remediation_workaround = None
+    session.commit()
+    return len(rows)
+
+
 def generate_remediation(session, cwe_ids: set[str] | None = None):
     query = session.query(CweOwaspMapping).filter(CweOwaspMapping.remediation_workaround.is_(None))
     if cwe_ids is not None:
@@ -160,7 +168,6 @@ def generate_remediation(session, cwe_ids: set[str] | None = None):
         )
 
     index_data = parse_owasp_index(INDEX_FILE)
-    df, n_docs, file_contents = build_document_frequency(CHEATSHEETS_FOLDER)
     mitre = load_mitre_mitigations(MITRE_CSV)
 
     success_count = 0
@@ -170,7 +177,7 @@ def generate_remediation(session, cwe_ids: set[str] | None = None):
     for mapping in pending:
         print(f"\nกำลังประมวลผล {mapping.cwe_id} ({mapping.description})...")
         try:
-            summary, source = remediate_one(mapping, index_data, df, n_docs, file_contents, mitre)
+            summary, source = remediate_one(mapping, index_data, mitre)
         except Exception as e:
             error_count += 1
             if "RESOURCE_EXHAUSTED" in str(e):
@@ -205,6 +212,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="ให้ Gemini เขียนคำแนะนำการแก้ไขสำหรับ CWE ที่ยังไม่มี")
     parser.add_argument("--project", help="ทำเฉพาะ CWE ที่พบในโปรเจกต์นี้ (ค่าเริ่มต้น: ทุก CWE ในฐานข้อมูล)")
+    parser.add_argument("--regenerate", action="store_true", help="ล้างคำแนะนำเดิมก่อน แล้วสร้างใหม่ทั้งหมด")
     args = parser.parse_args()
 
     with Session(engine) as session:
@@ -214,6 +222,8 @@ def main():
             if project is None:
                 raise SystemExit(f"ไม่พบโปรเจกต์ '{args.project}'")
             cwe_ids = get_project_cwe_ids(session, project.id)
+        if args.regenerate:
+            print("ล้างคำแนะนำเดิม:", clear_remediation(session, cwe_ids), "รายการ")
         generate_remediation(session, cwe_ids=cwe_ids)
 
 

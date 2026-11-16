@@ -23,3 +23,5 @@ CheatSheetSeries/
 
 # Database backups (contain vulnerability data - keep private)
 backups/
+# บันทึกผลการทดลองที่ใช้อ้างอิงในเล่ม (มีผลสแกนดิบ เก็บไว้ในเครื่องเท่านั้น)
+thesis_evidence/

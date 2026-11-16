@@ -203,7 +203,7 @@
     "CWE-1395": {
         "owasp_top10_2021": "A06:2021 - Vulnerable and Outdated Components",
         "description": "Dependency on Vulnerable Third-Party Component"
-    }, 
+    },
     "CWE-345": {
         "owasp_top10_2021": "A08:2021 - Software and Data Integrity Failures",
         "description": "Insufficient Verification of Data Authenticity"
@@ -211,5 +211,73 @@
     "CWE-550": {
         "owasp_top10_2021": "A09:2021 - Security Logging and Monitoring Failures",
         "description": "Missing Required Information"
+    },
+    "CWE-73": {
+        "owasp_top10_2021": "A04:2021 - Insecure Design",
+        "description": "External Control of File Name or Path"
+    },
+    "CWE-78": {
+        "owasp_top10_2021": "A03:2021 - Injection",
+        "description": "OS Command Injection"
+    },
+    "CWE-89": {
+        "owasp_top10_2021": "A03:2021 - Injection",
+        "description": "SQL Injection"
+    },
+    "CWE-200": {
+        "owasp_top10_2021": "A01:2021 - Broken Access Control",
+        "description": "Exposure of Sensitive Information to an Unauthorized Actor"
+    },
+    "CWE-264": {
+        "owasp_top10_2021": "A01:2021 - Broken Access Control",
+        "description": "Permissions, Privileges, and Access Controls"
+    },
+    "CWE-285": {
+        "owasp_top10_2021": "A01:2021 - Broken Access Control",
+        "description": "Improper Authorization"
+    },
+    "CWE-287": {
+        "owasp_top10_2021": "A07:2021 - Identification and Authentication Failures",
+        "description": "Improper Authentication"
+    },
+    "CWE-321": {
+        "owasp_top10_2021": "A02:2021 - Cryptographic Failures",
+        "description": "Use of Hard-coded Cryptographic Key"
+    },
+    "CWE-325": {
+        "owasp_top10_2021": "A02:2021 - Cryptographic Failures",
+        "description": "Missing Cryptographic Step"
+    },
+    "CWE-326": {
+        "owasp_top10_2021": "A02:2021 - Cryptographic Failures",
+        "description": "Inadequate Encryption Strength"
+    },
+    "CWE-328": {
+        "owasp_top10_2021": "A02:2021 - Cryptographic Failures",
+        "description": "Use of Weak Hash"
+    },
+    "CWE-331": {
+        "owasp_top10_2021": "A02:2021 - Cryptographic Failures",
+        "description": "Insufficient Entropy"
+    },
+    "CWE-347": {
+        "owasp_top10_2021": "A02:2021 - Cryptographic Failures",
+        "description": "Improper Verification of Cryptographic Signature"
+    },
+    "CWE-471": {
+        "owasp_top10_2021": "A03:2021 - Injection",
+        "description": "Modification of Assumed-Immutable Data (MAID)"
+    },
+    "CWE-538": {
+        "owasp_top10_2021": "A01:2021 - Broken Access Control",
+        "description": "Insertion of Sensitive Information into Externally-Accessible File or Directory"
+    },
+    "CWE-548": {
+        "owasp_top10_2021": "A01:2021 - Broken Access Control",
+        "description": "Exposure of Information Through Directory Listing"
+    },
+    "CWE-915": {
+        "owasp_top10_2021": "A08:2021 - Software and Data Integrity Failures",
+        "description": "Improperly Controlled Modification of Dynamically-Determined Object Attributes"
     }
 }
